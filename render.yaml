@@ -42,7 +42,46 @@ services:
       - key: REVERB_APP_SECRET
         sync: false
       - key: REVERB_HOST
-        sync: false
+        fromService:
+          type: web
+          name: food-donation-reverb
+          property: host
+      - key: REVERB_PORT
+        value: "443"
+      - key: REVERB_SCHEME
+        value: https
+
+  - type: web
+    name: food-donation-reverb
+    runtime: docker
+    dockerfilePath: ./Dockerfile.reverb
+    plan: free
+    envVars:
+      - key: APP_KEY
+        fromService:
+          type: web
+          name: food-donation-api
+          envVarKey: APP_KEY
+      - key: REVERB_APP_ID
+        fromService:
+          type: web
+          name: food-donation-api
+          envVarKey: REVERB_APP_ID
+      - key: REVERB_APP_KEY
+        fromService:
+          type: web
+          name: food-donation-api
+          envVarKey: REVERB_APP_KEY
+      - key: REVERB_APP_SECRET
+        fromService:
+          type: web
+          name: food-donation-api
+          envVarKey: REVERB_APP_SECRET
+      - key: REVERB_HOST
+        fromService:
+          type: web
+          name: food-donation-reverb
+          property: host
       - key: REVERB_PORT
         value: "443"
       - key: REVERB_SCHEME

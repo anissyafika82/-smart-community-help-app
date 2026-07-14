@@ -1,0 +1,18 @@
+FROM php:8.3-cli-alpine
+
+RUN apk add --no-cache git unzip libzip-dev icu-dev oniguruma-dev \
+    && docker-php-ext-install pdo pdo_mysql bcmath intl mbstring zip
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+COPY . .
+
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+ENV APP_ENV=production
+ENV APP_DEBUG=false
+ENV LOG_CHANNEL=stderr
+
+# Render injects $PORT at runtime; Reverb must bind to it directly (no nginx in front).
+CMD php artisan reverb:start --host=0.0.0.0 --port=${PORT:-8080}

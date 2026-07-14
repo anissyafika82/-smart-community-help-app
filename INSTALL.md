@@ -357,7 +357,54 @@ food_donation_app/                  Flutter mobile app
 
 ---
 
-## 7. Troubleshooting
+## 7. Deploying to Render
+
+Render has no managed MySQL, so the database lives on a separate free host and Render only
+runs the app. Two Render web services are used: the API itself, and a second one dedicated to
+Reverb (chat), since a single free web service can't run both the HTTP server and a persistent
+WebSocket process together.
+
+### 7.1 MySQL — Clever Cloud (free, works with SQLyog)
+
+1. Sign up at clever-cloud.com → **Create** → **Add-on** → **MySQL** → free "Dev" plan.
+2. Open the add-on's **Overview** tab and copy the Host, Port, Database, User, Password.
+3. Add those as a new connection in SQLyog — this is now the shared database for everyone on
+   the team, replacing the local MySQL instance.
+
+### 7.2 Push to GitHub
+
+`render.yaml` in the repo root already describes both services (`food-donation-api` and
+`food-donation-reverb`) as a Render Blueprint, so Render can create them together in one step.
+
+```bash
+git remote add origin <your-repo-url>
+git push -u origin master
+```
+
+### 7.3 Create the services on Render
+
+1. New account at render.com → **New +** → **Blueprint** → connect the repo → Render reads
+   `render.yaml` and proposes both services.
+2. Approve, then fill in the env vars marked "from render.yaml, needs a value" in the
+   dashboard for `food-donation-api`: `APP_KEY`, `APP_URL`, `DB_HOST`, `DB_PORT`,
+   `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` (from Clever Cloud), `CLOUDINARY_CLOUD_NAME`,
+   `CLOUDINARY_UPLOAD_PRESET`, `ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`,
+   `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET` (any random strings — just need to
+   match between the two services, which `render.yaml`'s `fromService` links already handle
+   automatically).
+3. `food-donation-reverb` needs no manual values — it inherits `APP_KEY` and the `REVERB_*`
+   credentials straight from `food-donation-api` via the Blueprint's `fromService` references,
+   and `REVERB_HOST` on the API side is likewise auto-filled with the Reverb service's Render
+   hostname.
+4. Deploy. The API service runs `scripts/00-laravel-deploy.sh` on every deploy (migrate +
+   cache); the Reverb service just starts `php artisan reverb:start` bound to Render's
+   assigned `$PORT`.
+5. Point the Flutter app's `api_config.dart` base URL and the Reverb client host at the two
+   `*.onrender.com` addresses Render assigns (visible on each service's dashboard page).
+
+---
+
+## 8. Troubleshooting
 
 - **`Connection refused` from the emulator**: use `10.0.2.2`, not `127.0.0.1`/`localhost`,
   as the backend host in `api_config.dart` when running `artisan serve`.
