@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: food-donation-api
+    name: smart-community-help-api
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
@@ -44,7 +44,7 @@ services:
       - key: REVERB_HOST
         fromService:
           type: web
-          name: food-donation-reverb
+          name: smart-community-help-reverb
           property: host
       - key: REVERB_PORT
         value: "443"
@@ -52,7 +52,7 @@ services:
         value: https
 
   - type: web
-    name: food-donation-reverb
+    name: smart-community-help-reverb
     runtime: docker
     dockerfilePath: ./Dockerfile.reverb
     plan: free
@@ -60,27 +60,27 @@ services:
       - key: APP_KEY
         fromService:
           type: web
-          name: food-donation-api
+          name: smart-community-help-api
           envVarKey: APP_KEY
       - key: REVERB_APP_ID
         fromService:
           type: web
-          name: food-donation-api
+          name: smart-community-help-api
           envVarKey: REVERB_APP_ID
       - key: REVERB_APP_KEY
         fromService:
           type: web
-          name: food-donation-api
+          name: smart-community-help-api
           envVarKey: REVERB_APP_KEY
       - key: REVERB_APP_SECRET
         fromService:
           type: web
-          name: food-donation-api
+          name: smart-community-help-api
           envVarKey: REVERB_APP_SECRET
       - key: REVERB_HOST
         fromService:
           type: web
-          name: food-donation-reverb
+          name: smart-community-help-reverb
           property: host
       - key: REVERB_PORT
         value: "443"

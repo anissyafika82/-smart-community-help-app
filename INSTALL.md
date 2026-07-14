@@ -8,17 +8,12 @@ appointments", "spare wheelchair to lend", "volunteers needed for food bank") an
 
 > **History note:** this project started as a "Smart Food Donation App" and was pivoted to
 > the broader "Smart Community Help" concept mid-build (another group had already built a
-> similar food-donation system). The backend/database and most of the Flutter app were
-> renamed accordingly — `donations` → `help_offers`, `claims` → `assistance_requests`,
-> `donor`/`receiver` roles → `helper`/`requester`. A few internal, non-user-facing
-> identifiers were deliberately left as-is to limit risk/scope for a working demo:
-> - The Flutter package name is still `food_donation_app` (folder `food_donation_app`,
->   Dart package `food_donation_app`) — purely an internal identifier, invisible to users.
->   The **displayed** app name/label is "Smart Community Help" everywhere that matters
->   (splash screen, `MaterialApp.title`, Android app label).
-> - The Laravel folder is still `food-donation` and its Laragon virtual host is still
->   `food-donation.test` — renaming a live folder path risks breaking references; if you
->   want a clean rename, see step 7 below.
+> similar food-donation system). The backend/database and Flutter app were renamed
+> accordingly — `donations` → `help_offers`, `claims` → `assistance_requests`,
+> `donor`/`receiver` roles → `helper`/`requester`, and (later) the project folders,
+> Flutter package name, Laravel virtual host, and database itself were all renamed too
+> (`food-donation` → `smart-community-help-api`, `food_donation_app` →
+> `smart_community_help_app`, `food_donation` DB → `smart_community_help` DB).
 
 > **Also note:** the original brief listed "Google Maps API" for location. This build uses
 > OpenStreetMap + `flutter_map` instead (no API key/billing needed). If your rubric requires
@@ -30,8 +25,8 @@ Two project folders make up the system:
 
 | Folder | What it is |
 |---|---|
-| `C:\laragon\www\food-donation` | Laravel 12 REST API backend |
-| `C:\laragon\www\food_donation_app` | Flutter mobile app (helper / requester / admin) |
+| `C:\laragon\www\smart-community-help-api` | Laravel 12 REST API backend |
+| `C:\laragon\www\smart_community_help_app` | Flutter mobile app (helper / requester / admin) |
 
 ---
 
@@ -58,7 +53,7 @@ Open Laragon and click **Start All** (or start MySQL only). The API will not boo
 ### 2.2 Install dependencies (already done if you're continuing this build)
 
 ```bash
-cd C:\laragon\www\food-donation
+cd C:\laragon\www\smart-community-help-api
 composer install
 ```
 
@@ -70,15 +65,15 @@ The `.env` file is already configured for this machine:
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=food_donation
+DB_DATABASE=smart_community_help
 DB_USERNAME=root
 DB_PASSWORD=
 ```
 
-The `food_donation` database has already been created. If you need to recreate it:
+The `smart_community_help` database has already been created. If you need to recreate it:
 
 ```bash
-mysql -u root -e "CREATE DATABASE IF NOT EXISTS food_donation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS smart_community_help CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
 ### 2.4 Migrate + seed
@@ -100,7 +95,7 @@ This creates all tables (`users`, `categories`, `help_offers`, `assistance_reque
 Two processes need to run together:
 
 **A. The REST API** — either:
-- Laragon virtual host (recommended): visit `http://food-donation.test/api/categories` in a
+- Laragon virtual host (recommended): visit `http://smart-community-help-api.test/api/categories` in a
   browser — you should see JSON, or
 - `php artisan serve` — runs on `http://127.0.0.1:8000`; the Android emulator reaches your
   host machine at `10.0.2.2`, already the default in `lib/config/api_config.dart`.
@@ -122,7 +117,7 @@ Open SQLyog → **New Connection**:
 - Port: `3306`
 - Username: `root`
 - Password: *(blank)*
-- Database: `food_donation`
+- Database: `smart_community_help`
 
 You'll see `users`, `categories`, `help_offers`, `assistance_requests`, `messages`,
 `ratings`, and `personal_access_tokens`.
@@ -145,7 +140,7 @@ curl -X POST http://127.0.0.1:8000/api/login -H "Content-Type: application/json"
    **Cloud Name**.
 2. Go to **Settings → Upload → Upload presets → Add upload preset**. Set **Signing Mode**
    to **Unsigned**, save, and copy the preset name.
-3. Update `food_donation_app/lib/config/api_config.dart`:
+3. Update `smart_community_help_app/lib/config/api_config.dart`:
    ```dart
    static const String cloudinaryCloudName = 'your-cloud-name';
    static const String cloudinaryUploadPreset = 'your-preset-name';
@@ -169,7 +164,7 @@ image data.
    ONESIGNAL_APP_ID=your-app-id
    ONESIGNAL_REST_API_KEY=your-rest-api-key
    ```
-4. Update `food_donation_app/lib/config/api_config.dart`:
+4. Update `smart_community_help_app/lib/config/api_config.dart`:
    ```dart
    static const String oneSignalAppId = 'your-app-id';
    ```
@@ -216,7 +211,7 @@ server like Reverb.
 
 Remember: `php artisan reverb:start` must be running (section 2.5B) for messages to
 broadcast live. If you regenerate keys with `php artisan reverb:install`, update the matching
-constants in `food_donation_app/lib/config/api_config.dart` (`reverbAppKey`).
+constants in `smart_community_help_app/lib/config/api_config.dart` (`reverbAppKey`).
 
 ---
 
@@ -225,7 +220,7 @@ constants in `food_donation_app/lib/config/api_config.dart` (`reverbAppKey`).
 ### 4.1 Install dependencies
 
 ```bash
-cd C:\laragon\www\food_donation_app
+cd C:\laragon\www\smart_community_help_app
 flutter pub get
 ```
 
@@ -274,7 +269,7 @@ flutter run
 ## 5. Project structure reference
 
 ```
-food-donation/                      Laravel 12 REST API
+smart-community-help-api/                      Laravel 12 REST API
 ├── app/
 │   ├── Http/
 │   │   ├── Controllers/Api/        AuthController, HelpOfferController,
@@ -295,7 +290,7 @@ food-donation/                      Laravel 12 REST API
     ├── api.php                     All REST endpoints
     └── channels.php                Private chat channel authorization
 
-food_donation_app/                  Flutter mobile app
+smart_community_help_app/                  Flutter mobile app
 └── lib/
     ├── config/                     api_config.dart, theme.dart
     ├── models/                     UserModel, HelpOfferModel, AssistanceRequestModel,
@@ -373,8 +368,8 @@ WebSocket process together.
 
 ### 7.2 Push to GitHub
 
-`render.yaml` in the repo root already describes both services (`food-donation-api` and
-`food-donation-reverb`) as a Render Blueprint, so Render can create them together in one step.
+`render.yaml` in the repo root already describes both services (`smart-community-help-api` and
+`smart-community-help-reverb`) as a Render Blueprint, so Render can create them together in one step.
 
 ```bash
 git remote add origin <your-repo-url>
@@ -386,14 +381,14 @@ git push -u origin master
 1. New account at render.com → **New +** → **Blueprint** → connect the repo → Render reads
    `render.yaml` and proposes both services.
 2. Approve, then fill in the env vars marked "from render.yaml, needs a value" in the
-   dashboard for `food-donation-api`: `APP_KEY`, `APP_URL`, `DB_HOST`, `DB_PORT`,
+   dashboard for `smart-community-help-api`: `APP_KEY`, `APP_URL`, `DB_HOST`, `DB_PORT`,
    `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` (from Clever Cloud), `CLOUDINARY_CLOUD_NAME`,
    `CLOUDINARY_UPLOAD_PRESET`, `ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`,
    `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET` (any random strings — just need to
    match between the two services, which `render.yaml`'s `fromService` links already handle
    automatically).
-3. `food-donation-reverb` needs no manual values — it inherits `APP_KEY` and the `REVERB_*`
-   credentials straight from `food-donation-api` via the Blueprint's `fromService` references,
+3. `smart-community-help-reverb` needs no manual values — it inherits `APP_KEY` and the `REVERB_*`
+   credentials straight from `smart-community-help-api` via the Blueprint's `fromService` references,
    and `REVERB_HOST` on the API side is likewise auto-filled with the Reverb service's Render
    hostname.
 4. Deploy. The API service runs `scripts/00-laravel-deploy.sh` on every deploy (migrate +
@@ -419,9 +414,3 @@ git push -u origin master
 - **No push notifications**: expected until you complete section 3.2 (OneSignal) — check
   Laravel's log (`storage/logs/laravel.log`) for "OneSignal not configured" messages, which
   confirm the rest of the app is working and this is just the missing optional step.
-- **Wondering why folder/package names still say "food donation"**: see the history note at
-  the top of this file — purely cosmetic/internal, doesn't affect functionality. To do a full
-  clean rename: rename the Laragon folder (`food-donation` → e.g. `community-help`, update
-  Laragon's virtual host + `.env` `APP_URL`), and for Flutter run a package-rename tool (e.g.
-  the `rename` pub package) rather than hand-editing — it also touches Android
-  `applicationId` / iOS bundle ID.
