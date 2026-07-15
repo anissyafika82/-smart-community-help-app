@@ -16,7 +16,7 @@ class ReportController extends Controller
     public function index(Request $request): JsonResponse
     {
         $reports = Report::query()
-            ->with(['reporter', 'reportedUser', 'assistanceRequest.helpOffer'])
+            ->with(['reporter', 'reportedUser', 'itemClaim.itemReport'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->latest()
             ->paginate($request->integer('per_page', 20));
@@ -45,7 +45,7 @@ class ReportController extends Controller
 
         return response()->json([
             'message' => 'Report updated.',
-            'data' => new ReportResource($report->fresh(['reporter', 'reportedUser', 'assistanceRequest'])),
+            'data' => new ReportResource($report->fresh(['reporter', 'reportedUser', 'itemClaim'])),
         ]);
     }
 }

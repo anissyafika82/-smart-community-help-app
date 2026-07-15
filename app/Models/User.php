@@ -15,8 +15,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
-    public const ROLE_HELPER = 'helper';
-    public const ROLE_REQUESTER = 'requester';
+    public const ROLE_USER = 'user';
 
     public const BADGE_BRONZE = 'bronze';
     public const BADGE_SILVER = 'silver';
@@ -54,23 +53,14 @@ class User extends Authenticatable
         ];
     }
 
-    public function helpOffers(): HasMany
+    public function itemReports(): HasMany
     {
-        return $this->hasMany(HelpOffer::class, 'helper_id');
+        return $this->hasMany(ItemReport::class);
     }
 
-    public function assistanceRequests(): HasMany
+    public function claims(): HasMany
     {
-        return $this->hasMany(AssistanceRequest::class, 'requester_id');
-    }
-
-    /**
-     * Requests this user has helped with (as the accepting volunteer),
-     * regardless of whether they came from a help offer or an SOS request.
-     */
-    public function helpedRequests(): HasMany
-    {
-        return $this->hasMany(AssistanceRequest::class, 'helper_id');
+        return $this->hasMany(ItemClaim::class, 'claimant_id');
     }
 
     public function activities(): HasMany
@@ -103,31 +93,30 @@ class User extends Authenticatable
         return $this->role === self::ROLE_ADMIN;
     }
 
-    public function isHelper(): bool
+    /**
+     * Items this user found and successfully returned to their owner —
+     * the basis for the Finder trust badge. Only counts "found" reports
+     * (not the lost-report-returned-via-claimant path) to keep the trust
+     * score simple to reason about.
+     */
+    public function itemsReturnedCount(): int
     {
-        return $this->role === self::ROLE_HELPER;
-    }
-
-    public function isRequester(): bool
-    {
-        return $this->role === self::ROLE_REQUESTER;
-    }
-
-    public function completedHelpsCount(): int
-    {
-        return $this->helpedRequests()->where('status', AssistanceRequest::STATUS_COMPLETED)->count();
+        return $this->itemReports()
+            ->where('report_type', ItemReport::TYPE_FOUND)
+            ->where('status', ItemReport::STATUS_RETURNED)
+            ->count();
     }
 
     /**
-     * Volunteer badge, computed from completed-help count rather than
+     * Finder trust badge, computed from successful returns rather than
      * stored — always reflects the current total, no award event to miss.
      */
     public function badge(): ?string
     {
-        $completed = $this->completedHelpsCount();
+        $returned = $this->itemsReturnedCount();
 
         foreach (self::BADGE_THRESHOLDS as $badge => $threshold) {
-            if ($completed >= $threshold) {
+            if ($returned >= $threshold) {
                 return $badge;
             }
         }

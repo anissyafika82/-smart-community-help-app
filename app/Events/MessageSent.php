@@ -35,7 +35,7 @@ class MessageSent implements ShouldBroadcastNow
     {
         return [
             new PrivateChannel(Message::channelName(
-                $this->message->help_offer_id,
+                $this->message->item_report_id,
                 $this->message->sender_id,
                 $this->message->recipient_id,
             )),

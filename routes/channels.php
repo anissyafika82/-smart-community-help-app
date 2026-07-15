@@ -1,46 +1,32 @@
 <?php
 
-use App\Models\AssistanceRequest;
-use App\Models\HelpOffer;
+use App\Models\ItemClaim;
+use App\Models\ItemReport;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
- * Authorizes a user to listen on chat.{helpOfferId}.{userIdA}.{userIdB} —
+ * Authorizes a user to listen on chat.{itemReportId}.{userIdA}.{userIdB} —
  * only the two participants themselves, and only if they're a legitimate
- * helper/requester pair for that help offer (helper, plus a requester who
- * has actually requested a portion of it).
+ * report-owner/claimant pair for that item report (owner, plus a claimant
+ * who has actually submitted a claim against it).
  */
-Broadcast::channel('chat.{helpOfferId}.{userIdA}.{userIdB}', function ($user, $helpOfferId, $userIdA, $userIdB) {
+Broadcast::channel('chat.{itemReportId}.{userIdA}.{userIdB}', function ($user, $itemReportId, $userIdA, $userIdB) {
     if (! in_array($user->id, [(int) $userIdA, (int) $userIdB], true)) {
         return false;
     }
 
-    $helpOffer = HelpOffer::find($helpOfferId);
-    if (! $helpOffer) {
+    $itemReport = ItemReport::find($itemReportId);
+    if (! $itemReport) {
         return false;
     }
 
     $otherId = $user->id === (int) $userIdA ? (int) $userIdB : (int) $userIdA;
 
-    $isHelperToRequester = $helpOffer->helper_id === $user->id
-        && AssistanceRequest::where('help_offer_id', $helpOfferId)->where('requester_id', $otherId)->exists();
+    $isOwnerToClaimant = $itemReport->user_id === $user->id
+        && ItemClaim::where('item_report_id', $itemReportId)->where('claimant_id', $otherId)->exists();
 
-    $isRequesterToHelper = $helpOffer->helper_id === $otherId
-        && AssistanceRequest::where('help_offer_id', $helpOfferId)->where('requester_id', $user->id)->exists();
+    $isClaimantToOwner = $itemReport->user_id === $otherId
+        && ItemClaim::where('item_report_id', $itemReportId)->where('claimant_id', $user->id)->exists();
 
-    return $isHelperToRequester || $isRequesterToHelper;
-});
-
-/**
- * Authorizes a user to listen for live location updates on
- * tracking.{requestId} — only the helper assigned to that request and the
- * requester who made it.
- */
-Broadcast::channel('tracking.{requestId}', function ($user, $requestId) {
-    $assistanceRequest = AssistanceRequest::find($requestId);
-    if (! $assistanceRequest) {
-        return false;
-    }
-
-    return in_array($user->id, [$assistanceRequest->helper_id, $assistanceRequest->requester_id], true);
+    return $isOwnerToClaimant || $isClaimantToOwner;
 });

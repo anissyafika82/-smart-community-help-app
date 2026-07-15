@@ -1,17 +1,18 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\AssistanceRequestController as AdminAssistanceRequestController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Api\Admin\HelpOfferController as AdminHelpOfferController;
+use App\Http\Controllers\Api\Admin\ItemClaimController as AdminItemClaimController;
+use App\Http\Controllers\Api\Admin\ItemReportController as AdminItemReportController;
 use App\Http\Controllers\Api\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\ActivityController;
-use App\Http\Controllers\Api\AssistanceRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\HelpOfferController;
+use App\Http\Controllers\Api\ItemClaimController;
+use App\Http\Controllers\Api\ItemReportController;
+use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ReportController;
 use Illuminate\Support\Facades\Route;
@@ -25,13 +26,14 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/help-offers', [HelpOfferController::class, 'index']);
-Route::get('/help-offers/nearby', [HelpOfferController::class, 'nearby']);
-Route::get('/help-offers/{helpOffer}', [HelpOfferController::class, 'show']);
+Route::get('/item-reports', [ItemReportController::class, 'index']);
+Route::get('/item-reports/nearby', [ItemReportController::class, 'nearby']);
+Route::get('/item-reports/{itemReport}', [ItemReportController::class, 'show']);
+Route::get('/item-reports/{itemReport}/matches', [MatchController::class, 'forItemReport']);
 
 /*
 |--------------------------------------------------------------------------
-| Authenticated routes (any role)
+| Authenticated routes (single "user" role, plus admin below)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
@@ -40,32 +42,47 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/onesignal/player-id', [AuthController::class, 'updatePlayerId']);
 
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
     /*
     |----------------------------------------------------------------------
-    | Chat (helper <-> requester, scoped to a help offer)
+    | Item reports (report/browse/manage lost & found items)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/my-item-reports', [ItemReportController::class, 'myItemReports']);
+    Route::post('/item-reports', [ItemReportController::class, 'store']);
+    Route::put('/item-reports/{itemReport}', [ItemReportController::class, 'update']);
+    Route::delete('/item-reports/{itemReport}', [ItemReportController::class, 'destroy']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Claims (submit an ownership claim; report owner verifies/rejects;
+    |  either party marks the item returned)
+    |----------------------------------------------------------------------
+    */
+    Route::post('/item-reports/{itemReport}/claims', [ItemClaimController::class, 'store']);
+    Route::get('/my-claims', [ItemClaimController::class, 'myClaims']);
+    Route::patch('/claims/{itemClaim}/approve', [ItemClaimController::class, 'approve']);
+    Route::patch('/claims/{itemClaim}/reject', [ItemClaimController::class, 'reject']);
+    Route::patch('/claims/{itemClaim}/return', [ItemClaimController::class, 'markReturned']);
+    Route::patch('/claims/{itemClaim}/cancel', [ItemClaimController::class, 'cancel']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Chat (report owner <-> claimant, scoped to an item report)
     |----------------------------------------------------------------------
     */
     Route::get('/my-chats', [ChatController::class, 'threads']);
-    Route::get('/help-offers/{helpOffer}/chat/{user}/messages', [ChatController::class, 'index']);
-    Route::post('/help-offers/{helpOffer}/chat/{user}/messages', [ChatController::class, 'store']);
+    Route::get('/item-reports/{itemReport}/chat/{user}/messages', [ChatController::class, 'index']);
+    Route::post('/item-reports/{itemReport}/chat/{user}/messages', [ChatController::class, 'store']);
 
     /*
     |----------------------------------------------------------------------
-    | Ratings (either party rates the other after a completed request)
+    | Ratings (either party rates the other after an item is returned)
     |----------------------------------------------------------------------
     */
-    Route::post('/requests/{assistanceRequest}/rating', [RatingController::class, 'store']);
+    Route::post('/claims/{itemClaim}/rating', [RatingController::class, 'store']);
     Route::get('/ratings/received', [RatingController::class, 'received']);
-
-    /*
-    |----------------------------------------------------------------------
-    | Live tracking (helper updates position; either party is authorized
-    |  to listen on the tracking.{requestId} broadcast channel — see
-    |  routes/channels.php)
-    |----------------------------------------------------------------------
-    */
-    Route::patch('/requests/{assistanceRequest}/location', [AssistanceRequestController::class, 'updateHelperLocation']);
-    Route::patch('/requests/{assistanceRequest}/confirm', [AssistanceRequestController::class, 'confirmCompletion']);
 
     /*
     |----------------------------------------------------------------------
@@ -76,48 +93,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Reports (report a request or user; any role may file one)
+    | Reports (report a claim or user; any user may file one)
     |----------------------------------------------------------------------
     */
     Route::post('/reports', [ReportController::class, 'store']);
-
-    /*
-    |----------------------------------------------------------------------
-    | Helper-only routes
-    |----------------------------------------------------------------------
-    */
-    Route::middleware('role:helper')->group(function () {
-        Route::get('/my-help-offers', [HelpOfferController::class, 'myHelpOffers']);
-        Route::post('/help-offers', [HelpOfferController::class, 'store']);
-        Route::put('/help-offers/{helpOffer}', [HelpOfferController::class, 'update']);
-        Route::delete('/help-offers/{helpOffer}', [HelpOfferController::class, 'destroy']);
-
-        Route::patch('/requests/{assistanceRequest}/approve', [AssistanceRequestController::class, 'approve']);
-        Route::patch('/requests/{assistanceRequest}/on-the-way', [AssistanceRequestController::class, 'onTheWay']);
-        Route::patch('/requests/{assistanceRequest}/reject', [AssistanceRequestController::class, 'reject']);
-        Route::patch('/requests/{assistanceRequest}/complete', [AssistanceRequestController::class, 'complete']);
-
-        Route::get('/requests/sos/nearby', [AssistanceRequestController::class, 'nearbySos']);
-        Route::patch('/requests/{assistanceRequest}/accept-sos', [AssistanceRequestController::class, 'acceptSos']);
-
-        Route::get('/dashboard/volunteer', [DashboardController::class, 'volunteer']);
-    });
-
-    /*
-    |----------------------------------------------------------------------
-    | Requester-only routes
-    |----------------------------------------------------------------------
-    */
-    Route::middleware('role:requester')->group(function () {
-        Route::post('/help-offers/{helpOffer}/request', [AssistanceRequestController::class, 'store']);
-        Route::patch('/requests/{assistanceRequest}/cancel', [AssistanceRequestController::class, 'cancel']);
-        Route::get('/my-requests', [AssistanceRequestController::class, 'myRequests']);
-        Route::get('/requests/scheduled', [AssistanceRequestController::class, 'scheduled']);
-
-        Route::post('/requests/sos', [AssistanceRequestController::class, 'storeSos']);
-
-        Route::get('/dashboard/requester', [DashboardController::class, 'requester']);
-    });
 
     /*
     |----------------------------------------------------------------------
@@ -132,10 +111,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/users/{user}/toggle-active', [AdminUserController::class, 'toggleActive']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
 
-        Route::get('/help-offers', [AdminHelpOfferController::class, 'index']);
-        Route::delete('/help-offers/{helpOffer}', [AdminHelpOfferController::class, 'destroy']);
+        Route::get('/item-reports', [AdminItemReportController::class, 'index']);
+        Route::delete('/item-reports/{itemReport}', [AdminItemReportController::class, 'destroy']);
 
-        Route::get('/requests', [AdminAssistanceRequestController::class, 'index']);
+        Route::get('/item-claims', [AdminItemClaimController::class, 'index']);
 
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);

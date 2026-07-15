@@ -25,8 +25,8 @@ class StoreReportRequest extends FormRequest
     {
         return [
             'reported_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assistance_request_id' => ['nullable', 'integer', 'exists:assistance_requests,id'],
-            'reason' => ['required', 'in:fake_request,spam,inappropriate_behaviour,other'],
+            'item_claim_id' => ['nullable', 'integer', 'exists:item_claims,id'],
+            'reason' => ['required', 'in:fake_item,spam,inappropriate_behaviour,other'],
             'description' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -34,8 +34,8 @@ class StoreReportRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if (! $this->filled('reported_user_id') && ! $this->filled('assistance_request_id')) {
-                $validator->errors()->add('reported_user_id', 'Report must target either a user or a request.');
+            if (! $this->filled('reported_user_id') && ! $this->filled('item_claim_id')) {
+                $validator->errors()->add('reported_user_id', 'Report must target either a user or a claim.');
             }
         });
     }

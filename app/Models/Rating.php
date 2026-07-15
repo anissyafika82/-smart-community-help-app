@@ -11,7 +11,7 @@ class Rating extends Model
     use HasFactory;
 
     protected $fillable = [
-        'assistance_request_id',
+        'item_claim_id',
         'rated_by_user_id',
         'rated_user_id',
         'stars',
@@ -25,9 +25,9 @@ class Rating extends Model
         ];
     }
 
-    public function assistanceRequest(): BelongsTo
+    public function itemClaim(): BelongsTo
     {
-        return $this->belongsTo(AssistanceRequest::class);
+        return $this->belongsTo(ItemClaim::class);
     }
 
     public function ratedBy(): BelongsTo

@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class HelpOfferResource extends JsonResource
+class ItemReportResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -16,22 +16,22 @@ class HelpOfferResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'title' => $this->title,
+            'report_type' => $this->report_type,
+            'item_name' => $this->item_name,
             'description' => $this->description,
-            'quantity' => $this->quantity,
-            'unit' => $this->unit,
-            'available_until' => $this->available_until?->toIso8601String(),
             'image_url' => $this->image_url,
-            'location_address' => $this->location_address,
+            'date_lost_or_found' => $this->date_lost_or_found?->toDateString(),
+            'location_name' => $this->location_name,
             'latitude' => $this->latitude !== null ? (float) $this->latitude : null,
             'longitude' => $this->longitude !== null ? (float) $this->longitude : null,
             'status' => $this->status,
+            'identifying_details' => $this->identifying_details,
             'distance_km' => $this->distance_km !== null ? round((float) $this->distance_km, 2) : null,
-            'helper' => new UserResource($this->whenLoaded('helper')),
+            'user' => new UserResource($this->whenLoaded('user')),
             'category' => new CategoryResource($this->whenLoaded('category')),
-            // Multiple requesters can each hold a request against the same
-            // help offer until its stock (quantity) runs out.
-            'assistance_requests' => AssistanceRequestResource::collection($this->whenLoaded('assistanceRequests')),
+            // Multiple claimants can each submit a claim against the same
+            // item report until one is verified.
+            'claims' => ItemClaimResource::collection($this->whenLoaded('claims')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

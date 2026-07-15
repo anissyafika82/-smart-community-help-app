@@ -1,22 +1,20 @@
 <?php
 
-namespace App\Http\Requests\HelpOffer;
+namespace App\Http\Requests\ItemReport;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateHelpOfferRequest extends FormRequest
+class UpdateItemReportRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        $helpOffer = $this->route('helpOffer');
+        $itemReport = $this->route('itemReport');
 
-        return $this->user()?->isHelper()
-            && $helpOffer
-            && $helpOffer->helper_id === $this->user()->id;
+        return $itemReport && $itemReport->user_id === $this->user()?->id;
     }
 
     /**
@@ -28,16 +26,15 @@ class UpdateHelpOfferRequest extends FormRequest
     {
         return [
             'category_id' => ['sometimes', 'exists:categories,id'],
-            'title' => ['sometimes', 'string', 'max:255'],
+            'item_name' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'string', 'max:2000'],
-            'quantity' => ['sometimes', 'integer', 'min:1'],
-            'unit' => ['sometimes', 'string', 'max:50'],
-            'available_until' => ['nullable', 'date'],
             'image_url' => ['nullable', 'url', 'max:2048'],
-            'location_address' => ['nullable', 'string', 'max:500'],
+            'date_lost_or_found' => ['sometimes', 'date', 'before_or_equal:today'],
+            'location_name' => ['nullable', 'string', 'max:500'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'status' => ['sometimes', 'in:available,claimed,completed,expired,cancelled'],
+            'identifying_details' => ['nullable', 'string', 'max:2000'],
+            'status' => ['sometimes', 'in:lost,found,potential_match,claimed,verified,returned,closed'],
         ];
     }
 }

@@ -10,7 +10,7 @@ class Report extends Model
 {
     use HasFactory;
 
-    public const REASON_FAKE_REQUEST = 'fake_request';
+    public const REASON_FAKE_ITEM = 'fake_item';
     public const REASON_SPAM = 'spam';
     public const REASON_INAPPROPRIATE_BEHAVIOUR = 'inappropriate_behaviour';
     public const REASON_OTHER = 'other';
@@ -23,7 +23,7 @@ class Report extends Model
     protected $fillable = [
         'reporter_id',
         'reported_user_id',
-        'assistance_request_id',
+        'item_claim_id',
         'reason',
         'description',
         'status',
@@ -40,8 +40,8 @@ class Report extends Model
         return $this->belongsTo(User::class, 'reported_user_id');
     }
 
-    public function assistanceRequest(): BelongsTo
+    public function itemClaim(): BelongsTo
     {
-        return $this->belongsTo(AssistanceRequest::class);
+        return $this->belongsTo(ItemClaim::class);
     }
 }

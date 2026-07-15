@@ -16,8 +16,8 @@ class Category extends Model
         'icon',
     ];
 
-    public function helpOffers(): HasMany
+    public function itemReports(): HasMany
     {
-        return $this->hasMany(HelpOffer::class);
+        return $this->hasMany(ItemReport::class);
     }
 }

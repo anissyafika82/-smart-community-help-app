@@ -1,18 +1,18 @@
 <?php
 
-namespace App\Http\Requests\Auth;
+namespace App\Http\Requests\ItemClaim;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class RegisterRequest extends FormRequest
+class StoreItemClaimRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->user() !== null;
     }
 
     /**
@@ -23,10 +23,9 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'phone' => ['nullable', 'string', 'max:20'],
+            'claim_message' => ['required', 'string', 'max:2000'],
+            'proof_description' => ['nullable', 'string', 'max:2000'],
+            'proof_image_url' => ['nullable', 'url', 'max:2048'],
         ];
     }
 }

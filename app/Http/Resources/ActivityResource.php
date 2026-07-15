@@ -18,7 +18,7 @@ class ActivityResource extends JsonResource
             'id' => $this->id,
             'type' => $this->type,
             'description' => $this->description,
-            'assistance_request_id' => $this->assistance_request_id,
+            'item_claim_id' => $this->item_claim_id,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

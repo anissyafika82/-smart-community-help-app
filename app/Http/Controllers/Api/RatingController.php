@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RatingResource;
 use App\Models\Activity;
-use App\Models\AssistanceRequest;
+use App\Models\ItemClaim;
 use App\Models\Rating;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +21,7 @@ class RatingController extends Controller
     {
         $ratings = $request->user()
             ->ratingsReceived()
-            ->with(['ratedBy', 'assistanceRequest.helpOffer'])
+            ->with(['ratedBy', 'itemClaim.itemReport'])
             ->latest()
             ->get();
 
@@ -29,37 +29,35 @@ class RatingController extends Controller
     }
 
     /**
-     * Either party (helper or requester) rates the other after a completed
-     * request — one rating per person, per request.
-     * POST /api/requests/{assistanceRequest}/rating
+     * Either party (report owner or claimant) rates the other after an
+     * item has been returned — one rating per person, per claim.
+     * POST /api/claims/{itemClaim}/rating
      */
-    public function store(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
+    public function store(Request $request, ItemClaim $itemClaim): JsonResponse
     {
-        $assistanceRequest->loadMissing('helpOffer');
+        $itemClaim->loadMissing('itemReport');
         $me = $request->user();
 
-        $helperId = $assistanceRequest->help_offer_id !== null
-            ? $assistanceRequest->helpOffer->helper_id
-            : $assistanceRequest->helper_id;
-        $requesterId = $assistanceRequest->requester_id;
+        $ownerId = $itemClaim->itemReport->user_id;
+        $claimantId = $itemClaim->claimant_id;
 
-        if (! in_array($me->id, [$helperId, $requesterId], true)) {
-            abort(403, 'You are not part of this request.');
+        if (! in_array($me->id, [$ownerId, $claimantId], true)) {
+            abort(403, 'You are not part of this claim.');
         }
 
-        if ($assistanceRequest->status !== AssistanceRequest::STATUS_COMPLETED) {
+        if (! $itemClaim->isReturned()) {
             throw ValidationException::withMessages([
-                'assistance_request' => 'You can only rate a request after it has been completed.',
+                'item_claim' => 'You can only rate a claim after the item has been returned.',
             ]);
         }
 
-        $alreadyRated = Rating::where('assistance_request_id', $assistanceRequest->id)
+        $alreadyRated = Rating::where('item_claim_id', $itemClaim->id)
             ->where('rated_by_user_id', $me->id)
             ->exists();
 
         if ($alreadyRated) {
             throw ValidationException::withMessages([
-                'assistance_request' => 'You have already rated this request.',
+                'item_claim' => 'You have already rated this claim.',
             ]);
         }
 
@@ -68,10 +66,10 @@ class RatingController extends Controller
             'comment' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $ratedUserId = $me->id === $helperId ? $requesterId : $helperId;
+        $ratedUserId = $me->id === $ownerId ? $claimantId : $ownerId;
 
         $rating = Rating::create([
-            'assistance_request_id' => $assistanceRequest->id,
+            'item_claim_id' => $itemClaim->id,
             'rated_by_user_id' => $me->id,
             'rated_user_id' => $ratedUserId,
             'stars' => $data['stars'],
@@ -82,7 +80,7 @@ class RatingController extends Controller
             $me->id,
             Activity::TYPE_RATING_SUBMITTED,
             "Rated {$rating->ratedUser->name} {$data['stars']} star(s)",
-            $assistanceRequest->id,
+            $itemClaim->id,
         );
 
         return response()->json([

@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Chat;
 
-use App\Models\AssistanceRequest;
-use App\Models\HelpOffer;
+use App\Models\ItemClaim;
+use App\Models\ItemReport;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -11,29 +11,29 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreMessageRequest extends FormRequest
 {
     /**
-     * Only the help offer's helper and requesters who have requested a
-     * portion of it may message each other about it — and only as an
-     * actual pair.
+     * Only the item report's owner and claimants who have an active claim
+     * against it may message each other about it — and only as an actual
+     * pair.
      */
     public function authorize(): bool
     {
-        /** @var HelpOffer $helpOffer */
-        $helpOffer = $this->route('helpOffer');
+        /** @var ItemReport $itemReport */
+        $itemReport = $this->route('itemReport');
         /** @var User $otherUser */
         $otherUser = $this->route('user');
         $me = $this->user();
 
-        if (! $helpOffer || ! $otherUser || ! $me || $me->id === $otherUser->id) {
+        if (! $itemReport || ! $otherUser || ! $me || $me->id === $otherUser->id) {
             return false;
         }
 
-        $isHelperToRequester = $helpOffer->helper_id === $me->id
-            && AssistanceRequest::where('help_offer_id', $helpOffer->id)->where('requester_id', $otherUser->id)->exists();
+        $isOwnerToClaimant = $itemReport->user_id === $me->id
+            && ItemClaim::where('item_report_id', $itemReport->id)->where('claimant_id', $otherUser->id)->exists();
 
-        $isRequesterToHelper = $helpOffer->helper_id === $otherUser->id
-            && AssistanceRequest::where('help_offer_id', $helpOffer->id)->where('requester_id', $me->id)->exists();
+        $isClaimantToOwner = $itemReport->user_id === $otherUser->id
+            && ItemClaim::where('item_report_id', $itemReport->id)->where('claimant_id', $me->id)->exists();
 
-        return $isHelperToRequester || $isRequesterToHelper;
+        return $isOwnerToClaimant || $isClaimantToOwner;
     }
 
     /**

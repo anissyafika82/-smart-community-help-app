@@ -11,7 +11,7 @@ class Message extends Model
     use HasFactory;
 
     protected $fillable = [
-        'help_offer_id',
+        'item_report_id',
         'sender_id',
         'recipient_id',
         'body',
@@ -25,9 +25,9 @@ class Message extends Model
         ];
     }
 
-    public function helpOffer(): BelongsTo
+    public function itemReport(): BelongsTo
     {
-        return $this->belongsTo(HelpOffer::class);
+        return $this->belongsTo(ItemReport::class);
     }
 
     public function sender(): BelongsTo
@@ -41,15 +41,15 @@ class Message extends Model
     }
 
     /**
-     * Deterministic channel name for a helper/requester chat thread scoped
-     * to one help offer — sorted user ids so both participants derive the
-     * same channel regardless of who initiated the conversation.
+     * Deterministic channel name for a chat thread scoped to one item
+     * report — sorted user ids so both participants derive the same
+     * channel regardless of who initiated the conversation.
      */
-    public static function channelName(int $helpOfferId, int $userIdA, int $userIdB): string
+    public static function channelName(int $itemReportId, int $userIdA, int $userIdB): string
     {
         $sorted = [$userIdA, $userIdB];
         sort($sorted);
 
-        return "chat.{$helpOfferId}.{$sorted[0]}.{$sorted[1]}";
+        return "chat.{$itemReportId}.{$sorted[0]}.{$sorted[1]}";
     }
 }

@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Hash;
 class AuthController extends Controller
 {
     /**
-     * Register a new helper/requester account and issue a Sanctum token.
+     * Register a new user account and issue a Sanctum token. Every
+     * registration is a plain "user" — the only other role, "admin", is
+     * seeded, not self-service.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -23,7 +25,7 @@ class AuthController extends Controller
             'name' => $request->validated('name'),
             'email' => $request->validated('email'),
             'password' => $request->validated('password'),
-            'role' => $request->validated('role'),
+            'role' => User::ROLE_USER,
             'phone' => $request->validated('phone'),
         ]);
 

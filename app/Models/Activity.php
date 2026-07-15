@@ -10,18 +10,18 @@ class Activity extends Model
 {
     use HasFactory;
 
-    public const TYPE_REQUEST_CREATED = 'request_created';
-    public const TYPE_SOS_CREATED = 'sos_created';
-    public const TYPE_REQUEST_ACCEPTED = 'request_accepted';
-    public const TYPE_REQUEST_ON_THE_WAY = 'request_on_the_way';
-    public const TYPE_REQUEST_COMPLETED = 'request_completed';
+    public const TYPE_ITEM_REPORTED = 'item_reported';
+    public const TYPE_CLAIM_SUBMITTED = 'claim_submitted';
+    public const TYPE_CLAIM_VERIFIED = 'claim_verified';
+    public const TYPE_CLAIM_REJECTED = 'claim_rejected';
+    public const TYPE_ITEM_RETURNED = 'item_returned';
     public const TYPE_RATING_SUBMITTED = 'rating_submitted';
 
     protected $fillable = [
         'user_id',
         'type',
         'description',
-        'assistance_request_id',
+        'item_claim_id',
     ];
 
     public function user(): BelongsTo
@@ -29,18 +29,18 @@ class Activity extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function assistanceRequest(): BelongsTo
+    public function itemClaim(): BelongsTo
     {
-        return $this->belongsTo(AssistanceRequest::class);
+        return $this->belongsTo(ItemClaim::class);
     }
 
-    public static function log(int $userId, string $type, string $description, ?int $assistanceRequestId = null): self
+    public static function log(int $userId, string $type, string $description, ?int $itemClaimId = null): self
     {
         return self::create([
             'user_id' => $userId,
             'type' => $type,
             'description' => $description,
-            'assistance_request_id' => $assistanceRequestId,
+            'item_claim_id' => $itemClaimId,
         ]);
     }
 }

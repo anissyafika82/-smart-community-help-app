@@ -22,7 +22,7 @@ class ReportResource extends JsonResource
             'admin_notes' => $this->admin_notes,
             'reporter' => new UserResource($this->whenLoaded('reporter')),
             'reported_user' => new UserResource($this->whenLoaded('reportedUser')),
-            'assistance_request' => new AssistanceRequestResource($this->whenLoaded('assistanceRequest')),
+            'item_claim' => new ItemClaimResource($this->whenLoaded('itemClaim')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

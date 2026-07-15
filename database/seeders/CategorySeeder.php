@@ -14,14 +14,15 @@ class CategorySeeder extends Seeder
     public function run(): void
     {
         $categories = [
-            ['name' => 'Food Assistance', 'icon' => 'restaurant'],
-            ['name' => 'Medical Assistance', 'icon' => 'local_hospital'],
-            ['name' => 'Transportation', 'icon' => 'directions_car'],
-            ['name' => 'Elderly Support', 'icon' => 'elderly'],
-            ['name' => 'Grocery Pickup', 'icon' => 'shopping_cart'],
-            ['name' => 'Wheelchair Borrowing', 'icon' => 'wheelchair_pickup'],
-            ['name' => 'Volunteer Service', 'icon' => 'volunteer_activism'],
-            ['name' => 'Emergency Help', 'icon' => 'emergency'],
+            ['name' => 'Electronics', 'icon' => 'devices'],
+            ['name' => 'Documents & Cards', 'icon' => 'badge'],
+            ['name' => 'Bags & Wallets', 'icon' => 'work'],
+            ['name' => 'Keys', 'icon' => 'key'],
+            ['name' => 'Jewelry & Accessories', 'icon' => 'diamond'],
+            ['name' => 'Clothing', 'icon' => 'checkroom'],
+            ['name' => 'Pets', 'icon' => 'pets'],
+            ['name' => 'Books & Stationery', 'icon' => 'menu_book'],
+            ['name' => 'Other', 'icon' => 'category'],
         ];
 
         foreach ($categories as $category) {

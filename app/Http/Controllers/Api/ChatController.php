@@ -6,7 +6,7 @@ use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Chat\StoreMessageRequest;
 use App\Http\Resources\MessageResource;
-use App\Models\HelpOffer;
+use App\Models\ItemReport;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\OneSignalService;
@@ -21,14 +21,14 @@ class ChatController extends Controller
 
     /**
      * Message history between the authenticated user and $otherUser about
-     * $helpOffer, oldest first. Marks the other user's messages as read.
-     * GET /api/help-offers/{helpOffer}/chat/{user}/messages
+     * $itemReport, oldest first. Marks the other user's messages as read.
+     * GET /api/item-reports/{itemReport}/chat/{user}/messages
      */
-    public function index(Request $request, HelpOffer $helpOffer, User $user): JsonResponse
+    public function index(Request $request, ItemReport $itemReport, User $user): JsonResponse
     {
         $me = $request->user();
 
-        $messages = Message::where('help_offer_id', $helpOffer->id)
+        $messages = Message::where('item_report_id', $itemReport->id)
             ->where(function ($query) use ($me, $user) {
                 $query->where(fn ($q) => $q->where('sender_id', $me->id)->where('recipient_id', $user->id))
                     ->orWhere(fn ($q) => $q->where('sender_id', $user->id)->where('recipient_id', $me->id));
@@ -37,7 +37,7 @@ class ChatController extends Controller
             ->oldest()
             ->get();
 
-        Message::where('help_offer_id', $helpOffer->id)
+        Message::where('item_report_id', $itemReport->id)
             ->where('sender_id', $user->id)
             ->where('recipient_id', $me->id)
             ->whereNull('read_at')
@@ -47,13 +47,13 @@ class ChatController extends Controller
     }
 
     /**
-     * Send a message about $helpOffer to $otherUser, broadcast instantly.
-     * POST /api/help-offers/{helpOffer}/chat/{user}/messages
+     * Send a message about $itemReport to $otherUser, broadcast instantly.
+     * POST /api/item-reports/{itemReport}/chat/{user}/messages
      */
-    public function store(StoreMessageRequest $request, HelpOffer $helpOffer, User $user): JsonResponse
+    public function store(StoreMessageRequest $request, ItemReport $itemReport, User $user): JsonResponse
     {
         $message = Message::create([
-            'help_offer_id' => $helpOffer->id,
+            'item_report_id' => $itemReport->id,
             'sender_id' => $request->user()->id,
             'recipient_id' => $user->id,
             'body' => $request->validated('body'),
@@ -66,7 +66,7 @@ class ChatController extends Controller
             $user,
             "New message from {$message->sender->name}",
             $message->body,
-            ['type' => 'new_message', 'help_offer_id' => $helpOffer->id, 'sender_id' => $message->sender_id],
+            ['type' => 'new_message', 'item_report_id' => $itemReport->id, 'sender_id' => $message->sender_id],
         );
 
         return response()->json(['data' => new MessageResource($message)], 201);
@@ -74,7 +74,7 @@ class ChatController extends Controller
 
     /**
      * Every conversation the authenticated user is part of, one entry per
-     * (help offer, other user) pair, with the latest message and unread count.
+     * (item report, other user) pair, with the latest message and unread count.
      * GET /api/my-chats
      */
     public function threads(Request $request): JsonResponse
@@ -83,12 +83,12 @@ class ChatController extends Controller
 
         $messages = Message::where('sender_id', $me->id)
             ->orWhere('recipient_id', $me->id)
-            ->with(['helpOffer', 'sender', 'recipient'])
+            ->with(['itemReport', 'sender', 'recipient'])
             ->latest()
             ->get();
 
         $threads = $messages
-            ->groupBy(fn (Message $m) => $m->help_offer_id.'-'.($m->sender_id === $me->id ? $m->recipient_id : $m->sender_id))
+            ->groupBy(fn (Message $m) => $m->item_report_id.'-'.($m->sender_id === $me->id ? $m->recipient_id : $m->sender_id))
             ->map(function ($group) use ($me) {
                 /** @var Message $latest */
                 $latest = $group->first();
@@ -96,8 +96,8 @@ class ChatController extends Controller
                 $unread = $group->where('recipient_id', $me->id)->whereNull('read_at')->count();
 
                 return [
-                    'help_offer_id' => $latest->help_offer_id,
-                    'help_offer_title' => $latest->helpOffer?->title,
+                    'item_report_id' => $latest->item_report_id,
+                    'item_report_name' => $latest->itemReport?->item_name,
                     'other_user' => $otherUser ? [
                         'id' => $otherUser->id,
                         'name' => $otherUser->name,

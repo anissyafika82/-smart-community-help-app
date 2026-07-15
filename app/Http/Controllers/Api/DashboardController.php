@@ -3,38 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AssistanceRequest;
+use App\Models\ItemClaim;
+use App\Models\ItemReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     /**
-     * Requester dashboard stats. GET /api/dashboard/requester
+     * The authenticated user's own dashboard stats. GET /api/dashboard
      */
-    public function requester(Request $request): JsonResponse
-    {
-        $requests = $request->user()->assistanceRequests();
-
-        return response()->json([
-            'data' => [
-                'total_requests' => (clone $requests)->count(),
-                'pending_requests' => (clone $requests)->where('status', AssistanceRequest::STATUS_PENDING)->count(),
-                'completed_requests' => (clone $requests)->where('status', AssistanceRequest::STATUS_COMPLETED)->count(),
-            ],
-        ]);
-    }
-
-    /**
-     * Volunteer (helper) dashboard stats. GET /api/dashboard/volunteer
-     */
-    public function volunteer(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        $reports = $user->itemReports();
+        $claims = $user->claims();
 
         return response()->json([
             'data' => [
-                'total_helps' => $user->completedHelpsCount(),
+                'total_reports' => (clone $reports)->count(),
+                'lost_reports' => (clone $reports)->where('report_type', ItemReport::TYPE_LOST)->count(),
+                'found_reports' => (clone $reports)->where('report_type', ItemReport::TYPE_FOUND)->count(),
+                'total_claims' => (clone $claims)->count(),
+                'pending_claims' => (clone $claims)->where('status', ItemClaim::STATUS_PENDING)->count(),
+                'items_returned' => $user->itemsReturnedCount(),
                 'average_rating' => $user->averageRating(),
                 'badge' => $user->badge(),
             ],
