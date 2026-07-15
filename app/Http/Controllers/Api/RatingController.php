@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RatingResource;
+use App\Models\Activity;
 use App\Models\AssistanceRequest;
 use App\Models\Rating;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,9 @@ class RatingController extends Controller
         $assistanceRequest->loadMissing('helpOffer');
         $me = $request->user();
 
-        $helperId = $assistanceRequest->helpOffer->helper_id;
+        $helperId = $assistanceRequest->help_offer_id !== null
+            ? $assistanceRequest->helpOffer->helper_id
+            : $assistanceRequest->helper_id;
         $requesterId = $assistanceRequest->requester_id;
 
         if (! in_array($me->id, [$helperId, $requesterId], true)) {
@@ -59,6 +62,13 @@ class RatingController extends Controller
             'stars' => $data['stars'],
             'comment' => $data['comment'] ?? null,
         ]);
+
+        Activity::log(
+            $me->id,
+            Activity::TYPE_RATING_SUBMITTED,
+            "Rated {$rating->ratedUser->name} {$data['stars']} star(s)",
+            $assistanceRequest->id,
+        );
 
         return response()->json([
             'message' => 'Rating submitted successfully.',

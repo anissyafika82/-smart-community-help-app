@@ -3,13 +3,17 @@
 use App\Http\Controllers\Api\Admin\AssistanceRequestController as AdminAssistanceRequestController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\Admin\HelpOfferController as AdminHelpOfferController;
+use App\Http\Controllers\Api\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AssistanceRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HelpOfferController;
 use App\Http\Controllers\Api\RatingController;
+use App\Http\Controllers\Api\ReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -54,6 +58,30 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
+    | Live tracking (helper updates position; either party is authorized
+    |  to listen on the tracking.{requestId} broadcast channel — see
+    |  routes/channels.php)
+    |----------------------------------------------------------------------
+    */
+    Route::patch('/requests/{assistanceRequest}/location', [AssistanceRequestController::class, 'updateHelperLocation']);
+    Route::patch('/requests/{assistanceRequest}/confirm', [AssistanceRequestController::class, 'confirmCompletion']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Activity timeline (own activity only)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/activities', [ActivityController::class, 'index']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Reports (report a request or user; any role may file one)
+    |----------------------------------------------------------------------
+    */
+    Route::post('/reports', [ReportController::class, 'store']);
+
+    /*
+    |----------------------------------------------------------------------
     | Helper-only routes
     |----------------------------------------------------------------------
     */
@@ -67,6 +95,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/requests/{assistanceRequest}/on-the-way', [AssistanceRequestController::class, 'onTheWay']);
         Route::patch('/requests/{assistanceRequest}/reject', [AssistanceRequestController::class, 'reject']);
         Route::patch('/requests/{assistanceRequest}/complete', [AssistanceRequestController::class, 'complete']);
+
+        Route::get('/requests/sos/nearby', [AssistanceRequestController::class, 'nearbySos']);
+        Route::patch('/requests/{assistanceRequest}/accept-sos', [AssistanceRequestController::class, 'acceptSos']);
+
+        Route::get('/dashboard/volunteer', [DashboardController::class, 'volunteer']);
     });
 
     /*
@@ -78,6 +111,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/help-offers/{helpOffer}/request', [AssistanceRequestController::class, 'store']);
         Route::patch('/requests/{assistanceRequest}/cancel', [AssistanceRequestController::class, 'cancel']);
         Route::get('/my-requests', [AssistanceRequestController::class, 'myRequests']);
+        Route::get('/requests/scheduled', [AssistanceRequestController::class, 'scheduled']);
+
+        Route::post('/requests/sos', [AssistanceRequestController::class, 'storeSos']);
+
+        Route::get('/dashboard/requester', [DashboardController::class, 'requester']);
     });
 
     /*
@@ -100,5 +138,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
+
+        Route::get('/reports', [AdminReportController::class, 'index']);
+        Route::patch('/reports/{report}', [AdminReportController::class, 'update']);
     });
 });

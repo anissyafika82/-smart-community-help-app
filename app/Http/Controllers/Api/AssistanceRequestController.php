@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\HelperLocationUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssistanceRequest\StoreAssistanceRequestRequest;
+use App\Http\Requests\AssistanceRequest\StoreSosRequestRequest;
 use App\Http\Resources\AssistanceRequestResource;
+use App\Models\Activity;
 use App\Models\AssistanceRequest;
+use App\Models\Category;
 use App\Models\HelpOffer;
+use App\Models\User;
 use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,10 +57,12 @@ class AssistanceRequestController extends Controller
 
             $assistanceRequest = AssistanceRequest::create([
                 'help_offer_id' => $locked->id,
+                'category_id' => $locked->category_id,
                 'requester_id' => $request->user()->id,
                 'quantity' => $quantity,
                 'priority' => $request->validated('priority') ?? AssistanceRequest::PRIORITY_MEDIUM,
                 'notes' => $request->validated('notes'),
+                'scheduled_at' => $request->validated('scheduled_at'),
                 'status' => AssistanceRequest::STATUS_PENDING,
             ]);
 
@@ -69,6 +76,13 @@ class AssistanceRequestController extends Controller
         });
 
         $assistanceRequest->load(['helpOffer.helper', 'requester']);
+
+        Activity::log(
+            $assistanceRequest->requester_id,
+            Activity::TYPE_REQUEST_CREATED,
+            "Requested \"{$assistanceRequest->helpOffer->title}\"",
+            $assistanceRequest->id,
+        );
 
         $this->notifications->notifyUser(
             $assistanceRequest->helpOffer->helper,
@@ -84,13 +98,126 @@ class AssistanceRequestController extends Controller
     }
 
     /**
-     * Requester's request history. GET /api/my-requests
+     * Requester raises an emergency SOS request directly, with no
+     * pre-existing help offer — any nearby volunteer can pick it up.
+     * Always high-urgency (priority is forced to "emergency") and pushed
+     * to every active volunteer immediately.
+     * POST /api/requests/sos
+     */
+    public function storeSos(StoreSosRequestRequest $request): JsonResponse
+    {
+        $categoryId = $request->validated('category_id')
+            ?? Category::where('slug', 'emergency-help')->value('id');
+
+        $assistanceRequest = AssistanceRequest::create([
+            'requester_id' => $request->user()->id,
+            'category_id' => $categoryId,
+            'quantity' => 1,
+            'priority' => AssistanceRequest::PRIORITY_EMERGENCY,
+            'is_sos' => true,
+            'latitude' => $request->validated('latitude'),
+            'longitude' => $request->validated('longitude'),
+            'address' => $request->validated('address'),
+            'notes' => $request->validated('notes'),
+            'status' => AssistanceRequest::STATUS_PENDING,
+        ]);
+        $assistanceRequest->load(['requester', 'category']);
+
+        Activity::log(
+            $assistanceRequest->requester_id,
+            Activity::TYPE_SOS_CREATED,
+            'Raised an emergency SOS request',
+            $assistanceRequest->id,
+        );
+
+        // No stored "home" location for volunteers to filter by, so an SOS
+        // alert pushes to every active volunteer rather than a geo-filtered
+        // subset — see /api/requests/sos/nearby for the geo-filtered browse
+        // volunteers use once they open the app.
+        User::where('role', User::ROLE_HELPER)
+            ->where('is_active', true)
+            ->whereNotNull('onesignal_player_id')
+            ->get()
+            ->each(fn (User $helper) => $this->notifications->notifyUser(
+                $helper,
+                'Emergency SOS nearby',
+                "{$assistanceRequest->requester->name} needs urgent help.",
+                ['type' => 'sos_created', 'assistance_request_id' => $assistanceRequest->id],
+            ));
+
+        return response()->json([
+            'message' => 'SOS request sent. Nearby volunteers have been notified.',
+            'data' => new AssistanceRequestResource($assistanceRequest),
+        ], 201);
+    }
+
+    /**
+     * Open SOS requests (not yet picked up), nearest-first, for volunteers
+     * to browse. GET /api/requests/sos/nearby?lat=&lng=&radius_km=&category_id=&priority=
+     */
+    public function nearbySos(Request $request): JsonResponse
+    {
+        $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'radius_km' => ['nullable', 'numeric', 'min:0.1'],
+        ]);
+
+        $lat = $request->float('lat');
+        $lng = $request->float('lng');
+        $radiusKm = $request->float('radius_km', 25);
+
+        $distanceExpr = '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * '
+            .'cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))';
+
+        $requests = AssistanceRequest::query()
+            ->select('*')
+            ->selectRaw("{$distanceExpr} AS distance_km", [$lat, $lng, $lat])
+            ->where('is_sos', true)
+            ->where('status', AssistanceRequest::STATUS_PENDING)
+            ->whereNull('helper_id')
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
+            ->when($request->filled('priority'), fn ($q) => $q->where('priority', $request->string('priority')))
+            ->having('distance_km', '<=', $radiusKm)
+            ->orderBy('distance_km')
+            ->with(['requester', 'category'])
+            ->get();
+
+        return response()->json(['data' => AssistanceRequestResource::collection($requests)]);
+    }
+
+    /**
+     * Requester's own upcoming scheduled requests (future-dated, not yet
+     * resolved). GET /api/requests/scheduled
+     */
+    public function scheduled(Request $request): JsonResponse
+    {
+        $requests = $request->user()
+            ->assistanceRequests()
+            ->whereNotNull('scheduled_at')
+            ->where('scheduled_at', '>=', now())
+            ->whereIn('status', [AssistanceRequest::STATUS_PENDING, AssistanceRequest::STATUS_APPROVED])
+            ->with(['helpOffer.category', 'helpOffer.helper'])
+            ->orderBy('scheduled_at')
+            ->get();
+
+        return response()->json(['data' => AssistanceRequestResource::collection($requests)]);
+    }
+
+    /**
+     * Requester's request history, with optional filters.
+     * GET /api/my-requests?category_id=&priority=&status=
      */
     public function myRequests(Request $request): JsonResponse
     {
         $requests = $request->user()
             ->assistanceRequests()
-            ->with(['helpOffer.category', 'helpOffer.helper', 'ratings'])
+            ->with(['helpOffer.category', 'helpOffer.helper', 'helper', 'category', 'ratings'])
+            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
+            ->when($request->filled('priority'), fn ($q) => $q->where('priority', $request->string('priority')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->latest()
             ->get();
 
@@ -105,8 +232,19 @@ class AssistanceRequestController extends Controller
     {
         $this->authorizeHelperAction($request, $assistanceRequest);
 
-        $assistanceRequest->update(['status' => AssistanceRequest::STATUS_APPROVED, 'resolved_at' => now()]);
+        $assistanceRequest->update([
+            'status' => AssistanceRequest::STATUS_APPROVED,
+            'helper_id' => $assistanceRequest->helpOffer->helper_id,
+            'resolved_at' => now(),
+        ]);
         $assistanceRequest->refresh()->load(['helpOffer', 'requester']);
+
+        Activity::log(
+            $assistanceRequest->helper_id,
+            Activity::TYPE_REQUEST_ACCEPTED,
+            "Accepted request for \"{$assistanceRequest->helpOffer->title}\"",
+            $assistanceRequest->id,
+        );
 
         $this->notifications->notifyUser(
             $assistanceRequest->requester,
@@ -122,6 +260,56 @@ class AssistanceRequestController extends Controller
     }
 
     /**
+     * Volunteer picks up an open SOS request (first to accept gets it).
+     * PATCH /api/requests/{assistanceRequest}/accept-sos
+     */
+    public function acceptSos(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
+    {
+        if (! $assistanceRequest->is_sos || $assistanceRequest->help_offer_id !== null) {
+            abort(422, 'This action only applies to SOS requests.');
+        }
+
+        $updated = DB::transaction(function () use ($request, $assistanceRequest) {
+            /** @var AssistanceRequest $locked */
+            $locked = AssistanceRequest::whereKey($assistanceRequest->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== AssistanceRequest::STATUS_PENDING || $locked->helper_id !== null) {
+                throw ValidationException::withMessages([
+                    'assistance_request' => 'This SOS request has already been picked up by another volunteer.',
+                ]);
+            }
+
+            $locked->update([
+                'status' => AssistanceRequest::STATUS_APPROVED,
+                'helper_id' => $request->user()->id,
+                'resolved_at' => now(),
+            ]);
+
+            return $locked;
+        });
+        $updated->refresh()->load(['helper', 'requester']);
+
+        Activity::log(
+            $updated->helper_id,
+            Activity::TYPE_REQUEST_ACCEPTED,
+            'Accepted an emergency SOS request',
+            $updated->id,
+        );
+
+        $this->notifications->notifyUser(
+            $updated->requester,
+            'Volunteer found',
+            "{$updated->helper->name} is responding to your SOS request.",
+            ['type' => 'sos_accepted', 'assistance_request_id' => $updated->id],
+        );
+
+        return response()->json([
+            'message' => 'SOS request accepted.',
+            'data' => new AssistanceRequestResource($updated),
+        ]);
+    }
+
+    /**
      * Helper marks an approved request as "on the way" to the requester.
      * PATCH /api/requests/{assistanceRequest}/on-the-way
      */
@@ -132,10 +320,17 @@ class AssistanceRequestController extends Controller
         $assistanceRequest->update(['status' => AssistanceRequest::STATUS_ON_THE_WAY]);
         $assistanceRequest->refresh()->load(['helpOffer', 'requester']);
 
+        Activity::log(
+            $assistanceRequest->helper_id,
+            Activity::TYPE_REQUEST_ON_THE_WAY,
+            'Marked a request as on the way',
+            $assistanceRequest->id,
+        );
+
         $this->notifications->notifyUser(
             $assistanceRequest->requester,
             'Helper is on the way',
-            "Your helper is on the way for \"{$assistanceRequest->helpOffer->title}\".",
+            'Your helper is on the way'.($assistanceRequest->helpOffer ? " for \"{$assistanceRequest->helpOffer->title}\"." : '.'),
             ['type' => 'request_on_the_way', 'assistance_request_id' => $assistanceRequest->id],
         );
 
@@ -146,8 +341,41 @@ class AssistanceRequestController extends Controller
     }
 
     /**
+     * Helper updates their live GPS position while en route (approved or
+     * on-the-way), broadcast instantly to the requester's map.
+     * PATCH /api/requests/{assistanceRequest}/location
+     */
+    public function updateHelperLocation(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
+    {
+        if ($assistanceRequest->helper_id !== $request->user()->id) {
+            abort(403, 'You are not the assigned helper for this request.');
+        }
+
+        if (! in_array($assistanceRequest->status, [AssistanceRequest::STATUS_APPROVED, AssistanceRequest::STATUS_ON_THE_WAY], true)) {
+            throw ValidationException::withMessages([
+                'assistance_request' => 'Location updates only apply while a request is approved or on the way.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $assistanceRequest->update([
+            'helper_latitude' => $data['latitude'],
+            'helper_longitude' => $data['longitude'],
+            'helper_location_updated_at' => now(),
+        ]);
+
+        broadcast(new HelperLocationUpdated($assistanceRequest));
+
+        return response()->json(['message' => 'Location updated.']);
+    }
+
+    /**
      * Helper rejects a pending request; its quantity is returned to the
-     * help offer's available stock.
+     * help offer's available stock (if any — SOS requests have none).
      * PATCH /api/requests/{assistanceRequest}/reject
      */
     public function reject(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
@@ -163,7 +391,7 @@ class AssistanceRequestController extends Controller
         $this->notifications->notifyUser(
             $assistanceRequest->requester,
             'Request rejected',
-            "Your request for \"{$assistanceRequest->helpOffer->title}\" was rejected.",
+            'Your request was rejected'.($assistanceRequest->helpOffer ? " for \"{$assistanceRequest->helpOffer->title}\"." : '.'),
             ['type' => 'request_rejected', 'assistance_request_id' => $assistanceRequest->id],
         );
 
@@ -174,10 +402,10 @@ class AssistanceRequestController extends Controller
     }
 
     /**
-     * Helper marks a request as completed (help delivered), optionally
-     * attaching a proof-of-completion image URL (uploaded client-side to
-     * Cloudinary, same pattern as help offer images). Stock was already
-     * deducted when the request was made, so quantity is unchanged.
+     * Helper marks a request delivered, attaching a proof-of-completion
+     * image (uploaded client-side to Cloudinary). This does NOT finalize
+     * the request — it moves to "pending_confirmation" so the requester
+     * can view the proof and confirm before it's marked completed.
      * PATCH /api/requests/{assistanceRequest}/complete
      */
     public function complete(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
@@ -187,7 +415,7 @@ class AssistanceRequestController extends Controller
         $data = $request->validate(['proof_image_url' => ['nullable', 'url', 'max:2048']]);
 
         $assistanceRequest->update([
-            'status' => AssistanceRequest::STATUS_COMPLETED,
+            'status' => AssistanceRequest::STATUS_PENDING_CONFIRMATION,
             'proof_image_url' => $data['proof_image_url'] ?? null,
             'resolved_at' => now(),
         ]);
@@ -195,13 +423,58 @@ class AssistanceRequestController extends Controller
 
         $this->notifications->notifyUser(
             $assistanceRequest->requester,
-            'Marked as completed',
-            "\"{$assistanceRequest->helpOffer->title}\" is marked completed. Don't forget to rate your helper!",
-            ['type' => 'request_completed', 'assistance_request_id' => $assistanceRequest->id],
+            'Awaiting your confirmation',
+            'Your helper marked the request as delivered — check the proof photo and confirm completion.',
+            ['type' => 'request_pending_confirmation', 'assistance_request_id' => $assistanceRequest->id],
         );
 
         return response()->json([
-            'message' => 'Request marked as completed.',
+            'message' => 'Marked as delivered. Waiting for requester confirmation.',
+            'data' => new AssistanceRequestResource($assistanceRequest),
+        ]);
+    }
+
+    /**
+     * Requester confirms completion after reviewing the helper's proof
+     * photo — the only action that finalizes a request as "completed".
+     * PATCH /api/requests/{assistanceRequest}/confirm
+     */
+    public function confirmCompletion(Request $request, AssistanceRequest $assistanceRequest): JsonResponse
+    {
+        if ($assistanceRequest->requester_id !== $request->user()->id) {
+            abort(403, 'You can only confirm your own requests.');
+        }
+
+        if ($assistanceRequest->status !== AssistanceRequest::STATUS_PENDING_CONFIRMATION) {
+            throw ValidationException::withMessages([
+                'assistance_request' => 'This request is not awaiting confirmation.',
+            ]);
+        }
+
+        $assistanceRequest->update([
+            'status' => AssistanceRequest::STATUS_COMPLETED,
+            'confirmed_at' => now(),
+        ]);
+        $assistanceRequest->refresh()->load(['helpOffer', 'helper', 'requester']);
+
+        Activity::log(
+            $assistanceRequest->requester_id,
+            Activity::TYPE_REQUEST_COMPLETED,
+            'Confirmed a request as completed',
+            $assistanceRequest->id,
+        );
+
+        if ($assistanceRequest->helper) {
+            $this->notifications->notifyUser(
+                $assistanceRequest->helper,
+                'Completion confirmed',
+                'The requester confirmed completion. Thanks for helping — a rating may be waiting!',
+                ['type' => 'request_confirmed', 'assistance_request_id' => $assistanceRequest->id],
+            );
+        }
+
+        return response()->json([
+            'message' => 'Completion confirmed.',
             'data' => new AssistanceRequestResource($assistanceRequest),
         ]);
     }
@@ -236,10 +509,15 @@ class AssistanceRequestController extends Controller
 
     /**
      * Return a request's quantity to its help offer's available stock,
-     * flipping the offer back to "available" if it had run out.
+     * flipping the offer back to "available" if it had run out. SOS
+     * requests have no help offer, so this is a no-op for them.
      */
     private function restoreQuantity(AssistanceRequest $assistanceRequest): void
     {
+        if ($assistanceRequest->help_offer_id === null) {
+            return;
+        }
+
         /** @var HelpOffer $helpOffer */
         $helpOffer = HelpOffer::whereKey($assistanceRequest->help_offer_id)->lockForUpdate()->firstOrFail();
 
@@ -258,8 +536,12 @@ class AssistanceRequestController extends Controller
     ): void {
         $assistanceRequest->loadMissing('helpOffer');
 
-        if ($assistanceRequest->helpOffer->helper_id !== $request->user()->id) {
-            abort(403, 'You can only manage requests on your own help offers.');
+        $responsibleHelperId = $assistanceRequest->help_offer_id !== null
+            ? $assistanceRequest->helpOffer->helper_id
+            : $assistanceRequest->helper_id;
+
+        if ($responsibleHelperId !== $request->user()->id) {
+            abort(403, 'You can only manage requests assigned to you.');
         }
 
         if ($assistanceRequest->status !== $requiredStatus) {

@@ -5,7 +5,7 @@ namespace App\Http\Requests\AssistanceRequest;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreAssistanceRequestRequest extends FormRequest
+class StoreSosRequestRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -22,14 +22,12 @@ class StoreAssistanceRequestRequest extends FormRequest
      */
     public function rules(): array
     {
-        $helpOffer = $this->route('helpOffer');
-        $maxQuantity = $helpOffer?->quantity ?? 1;
-
         return [
-            'quantity' => ['required', 'integer', 'min:1', "max:{$maxQuantity}"],
-            'priority' => ['nullable', 'in:low,medium,high'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'notes' => ['nullable', 'string', 'max:500'],
-            'scheduled_at' => ['nullable', 'date', 'after:now'],
         ];
     }
 }

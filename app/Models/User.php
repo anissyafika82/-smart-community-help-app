@@ -18,6 +18,16 @@ class User extends Authenticatable
     public const ROLE_HELPER = 'helper';
     public const ROLE_REQUESTER = 'requester';
 
+    public const BADGE_BRONZE = 'bronze';
+    public const BADGE_SILVER = 'silver';
+    public const BADGE_GOLD = 'gold';
+
+    private const BADGE_THRESHOLDS = [
+        self::BADGE_GOLD => 30,
+        self::BADGE_SILVER => 15,
+        self::BADGE_BRONZE => 5,
+    ];
+
     protected $fillable = [
         'name',
         'email',
@@ -55,6 +65,25 @@ class User extends Authenticatable
     }
 
     /**
+     * Requests this user has helped with (as the accepting volunteer),
+     * regardless of whether they came from a help offer or an SOS request.
+     */
+    public function helpedRequests(): HasMany
+    {
+        return $this->hasMany(AssistanceRequest::class, 'helper_id');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class);
+    }
+
+    public function reportsFiled(): HasMany
+    {
+        return $this->hasMany(Report::class, 'reporter_id');
+    }
+
+    /**
      * Ratings this user has received from others.
      */
     public function ratingsReceived(): HasMany
@@ -82,5 +111,27 @@ class User extends Authenticatable
     public function isRequester(): bool
     {
         return $this->role === self::ROLE_REQUESTER;
+    }
+
+    public function completedHelpsCount(): int
+    {
+        return $this->helpedRequests()->where('status', AssistanceRequest::STATUS_COMPLETED)->count();
+    }
+
+    /**
+     * Volunteer badge, computed from completed-help count rather than
+     * stored — always reflects the current total, no award event to miss.
+     */
+    public function badge(): ?string
+    {
+        $completed = $this->completedHelpsCount();
+
+        foreach (self::BADGE_THRESHOLDS as $badge => $threshold) {
+            if ($completed >= $threshold) {
+                return $badge;
+            }
+        }
+
+        return null;
     }
 }

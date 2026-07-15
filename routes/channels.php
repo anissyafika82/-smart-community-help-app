@@ -30,3 +30,17 @@ Broadcast::channel('chat.{helpOfferId}.{userIdA}.{userIdB}', function ($user, $h
 
     return $isHelperToRequester || $isRequesterToHelper;
 });
+
+/**
+ * Authorizes a user to listen for live location updates on
+ * tracking.{requestId} — only the helper assigned to that request and the
+ * requester who made it.
+ */
+Broadcast::channel('tracking.{requestId}', function ($user, $requestId) {
+    $assistanceRequest = AssistanceRequest::find($requestId);
+    if (! $assistanceRequest) {
+        return false;
+    }
+
+    return in_array($user->id, [$assistanceRequest->helper_id, $assistanceRequest->requester_id], true);
+});

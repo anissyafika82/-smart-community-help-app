@@ -109,9 +109,14 @@ class HelpOfferController extends Controller
     {
         $helpOffer = $request->user()->helpOffers()->create($request->validated());
 
+        // create() doesn't reload column defaults set at the DB level (e.g.
+        // status), so the in-memory model would otherwise report null for
+        // them here even though the row itself is correct.
+        $helpOffer->refresh()->load(['helper', 'category']);
+
         return response()->json([
             'message' => 'Help offer posted successfully.',
-            'data' => new HelpOfferResource($helpOffer->load(['helper', 'category'])),
+            'data' => new HelpOfferResource($helpOffer),
         ], 201);
     }
 

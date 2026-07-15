@@ -24,6 +24,8 @@ class UserResource extends JsonResource
             'avatar_url' => $this->avatar_url,
             'is_active' => $this->is_active,
             'average_rating' => $this->averageRating(),
+            'badge' => $this->role === \App\Models\User::ROLE_HELPER ? $this->badge() : null,
+            'completed_helps_count' => $this->role === \App\Models\User::ROLE_HELPER ? $this->completedHelpsCount() : null,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
