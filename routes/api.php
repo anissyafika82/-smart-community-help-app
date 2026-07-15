@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |----------------------------------------------------------------------
     */
     Route::post('/requests/{assistanceRequest}/rating', [RatingController::class, 'store']);
+    Route::get('/ratings/received', [RatingController::class, 'received']);
 
     /*
     |----------------------------------------------------------------------

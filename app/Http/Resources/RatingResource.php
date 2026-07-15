@@ -20,6 +20,7 @@ class RatingResource extends JsonResource
             'comment' => $this->comment,
             'rated_by' => new UserResource($this->whenLoaded('ratedBy')),
             'rated_user' => new UserResource($this->whenLoaded('ratedUser')),
+            'assistance_request' => new AssistanceRequestResource($this->whenLoaded('assistanceRequest')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

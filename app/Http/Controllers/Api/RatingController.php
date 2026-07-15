@@ -14,6 +14,21 @@ use Illuminate\Validation\ValidationException;
 class RatingController extends Controller
 {
     /**
+     * Ratings the authenticated user has received, newest first, with who
+     * gave each one. GET /api/ratings/received
+     */
+    public function received(Request $request): JsonResponse
+    {
+        $ratings = $request->user()
+            ->ratingsReceived()
+            ->with(['ratedBy', 'assistanceRequest.helpOffer'])
+            ->latest()
+            ->get();
+
+        return response()->json(['data' => RatingResource::collection($ratings)]);
+    }
+
+    /**
      * Either party (helper or requester) rates the other after a completed
      * request — one rating per person, per request.
      * POST /api/requests/{assistanceRequest}/rating
