@@ -7,12 +7,17 @@ use App\Http\Requests\ItemReport\StoreItemReportRequest;
 use App\Http\Requests\ItemReport\UpdateItemReportRequest;
 use App\Http\Resources\ItemReportResource;
 use App\Models\ItemReport;
+use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ItemReportController extends Controller
 {
+    public function __construct(private readonly TelegramService $telegram)
+    {
+    }
+
     /**
      * Browse lost & found items. Supports keyword search, category,
      * report type, and date-range filters.
@@ -129,6 +134,8 @@ class ItemReportController extends Controller
         // create() doesn't reload column defaults set at the DB level, so
         // refresh to make sure the response reflects the true DB state.
         $itemReport->refresh()->load(['user', 'category']);
+
+        $this->telegram->broadcastItemReport($itemReport);
 
         return response()->json([
             'message' => 'Item report posted successfully.',

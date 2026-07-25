@@ -49,4 +49,11 @@ return [
         'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
     ],
 
+    'telegram' => [
+        // Bot token from @BotFather. Chat ID can be a numeric group/channel
+        // ID or, for a public channel, "@channelusername".
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
+    ],
+
 ];
