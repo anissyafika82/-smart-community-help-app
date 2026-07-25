@@ -40,28 +40,31 @@ class TelegramService
         $heading = $isFound ? 'Found Item' : 'Lost Item';
         $callToAction = $isFound
             ? 'Open the FindBack app to claim this item.'
-            : "Seen it? Open the FindBack app to let {$itemReport->user->name} know.";
+            : 'Seen it? Open the FindBack app to let '.e($itemReport->user->name).' know.';
 
-        $caption = "{$emoji} *{$heading}*\n\n"
-            ."*{$itemReport->item_name}*\n"
-            .$itemReport->description
+        $caption = "{$emoji} <b>{$heading}</b>\n\n"
+            .'<b>'.e($itemReport->item_name).'</b>'."\n"
+            .e($itemReport->description)
             ."\n\n"
-            .($itemReport->location_name ? "📍 {$itemReport->location_name}\n" : '')
-            .($itemReport->category ? "🏷 {$itemReport->category->name}\n" : '')
+            .($itemReport->location_name ? '📍 '.e($itemReport->location_name)."\n" : '')
+            .($itemReport->category ? '🏷 '.e($itemReport->category->name)."\n" : '')
             ."\n{$callToAction}";
 
         if ($itemReport->image_url) {
-            $this->call('sendPhoto', ['chat_id' => $chatId, 'photo' => $itemReport->image_url, 'caption' => $caption, 'parse_mode' => 'Markdown']);
+            $this->call('sendPhoto', ['chat_id' => $chatId, 'photo' => $itemReport->image_url, 'caption' => $caption, 'parse_mode' => 'HTML']);
         } else {
-            $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $caption, 'parse_mode' => 'Markdown']);
+            $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $caption, 'parse_mode' => 'HTML']);
         }
     }
 
     /**
-     * Sends a plain text reply to a specific chat (used by TelegramBotService
-     * to answer /start, /founditems, /lostitems, etc.).
+     * Sends a text reply to a specific chat (used by TelegramBotService to
+     * answer /start, /founditems, /lostitems, button taps, etc.). Pass
+     * $inlineKeyboard as a list of button rows, e.g.
+     * [[['text' => 'Found', 'callback_data' => 'founditems']]], to attach
+     * tappable buttons instead of requiring the user to type a command.
      */
-    public function sendMessage(int|string $chatId, string $text): void
+    public function sendMessage(int|string $chatId, string $text, ?array $inlineKeyboard = null): void
     {
         if (! $this->isConfigured()) {
             Log::info('Telegram not configured; skipping message send.');
@@ -69,7 +72,22 @@ class TelegramService
             return;
         }
 
-        $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'Markdown']);
+        $payload = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML'];
+
+        if ($inlineKeyboard !== null) {
+            $payload['reply_markup'] = json_encode(['inline_keyboard' => $inlineKeyboard]);
+        }
+
+        $this->call('sendMessage', $payload);
+    }
+
+    /**
+     * Dismisses the loading spinner Telegram shows on an inline button
+     * until the tap is acknowledged.
+     */
+    public function answerCallbackQuery(string $callbackQueryId): void
+    {
+        $this->call('answerCallbackQuery', ['callback_query_id' => $callbackQueryId]);
     }
 
     /**
