@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\CustomLocationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ItemClaimController;
 use App\Http\Controllers\Api\ItemReportController;
@@ -47,6 +48,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/onesignal/player-id', [AuthController::class, 'updatePlayerId']);
     Route::post('/telegram/link-code', [TelegramLinkController::class, 'generate']);
+
+    Route::get('/locations/search', [CustomLocationController::class, 'search']);
+    Route::post('/locations', [CustomLocationController::class, 'store']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
