@@ -108,6 +108,37 @@ class TelegramService
         ]));
     }
 
+    /**
+     * Resolves a photo's file_id (from an incoming message) to a temporary
+     * download URL, so it can be handed to Cloudinary as an upload source.
+     */
+    public function getFileUrl(string $fileId): ?string
+    {
+        $botToken = $this->botToken();
+
+        if (! $botToken) {
+            return null;
+        }
+
+        try {
+            $response = Http::get("https://api.telegram.org/bot{$botToken}/getFile", ['file_id' => $fileId]);
+
+            if (! $response->successful()) {
+                Log::warning('Telegram getFile failed.', ['response' => $response->body()]);
+
+                return null;
+            }
+
+            $filePath = $response->json('result.file_path');
+
+            return $filePath ? "https://api.telegram.org/file/bot{$botToken}/{$filePath}" : null;
+        } catch (\Throwable $e) {
+            Log::warning('Telegram getFile failed.', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
     private function call(string $method, array $payload): void
     {
         $botToken = $this->botToken();
