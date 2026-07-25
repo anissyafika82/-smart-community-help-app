@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ItemReportController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\TelegramLinkController;
 use App\Http\Controllers\Api\TelegramWebhookController;
 use App\Http\Controllers\Api\VerificationQuestionController;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/onesignal/player-id', [AuthController::class, 'updatePlayerId']);
+    Route::post('/telegram/link-code', [TelegramLinkController::class, 'generate']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
 

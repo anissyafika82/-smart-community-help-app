@@ -36,6 +36,7 @@ class User extends Authenticatable
         'address',
         'avatar_url',
         'onesignal_player_id',
+        'telegram_chat_id',
         'is_active',
     ];
 
