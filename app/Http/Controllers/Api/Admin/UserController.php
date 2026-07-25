@@ -7,6 +7,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -46,6 +47,20 @@ class UserController extends Controller
             'message' => $user->is_active ? 'User activated.' : 'User deactivated.',
             'data' => new UserResource($user),
         ]);
+    }
+
+    /**
+     * There's no email service configured to power a self-service "forgot
+     * password" flow, so a user who's locked out asks an admin, who resets
+     * it here directly. PATCH /api/admin/users/{user}/reset-password
+     */
+    public function resetPassword(Request $request, User $user): JsonResponse
+    {
+        $fields = $request->validate(['new_password' => ['required', 'string', 'min:8']]);
+
+        $user->update(['password' => Hash::make($fields['new_password'])]);
+
+        return response()->json(['message' => "Password reset for {$user->name}."]);
     }
 
     public function destroy(User $user): JsonResponse

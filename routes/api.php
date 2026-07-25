@@ -127,6 +127,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{user}', [AdminUserController::class, 'show']);
         Route::patch('/users/{user}/toggle-active', [AdminUserController::class, 'toggleActive']);
+        Route::patch('/users/{user}/reset-password', [AdminUserController::class, 'resetPassword']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
 
         Route::get('/item-reports', [AdminItemReportController::class, 'index']);
