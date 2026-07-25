@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ItemReportController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\VerificationQuestionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -66,6 +67,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/claims/{itemClaim}/reject', [ItemClaimController::class, 'reject']);
     Route::patch('/claims/{itemClaim}/return', [ItemClaimController::class, 'markReturned']);
     Route::patch('/claims/{itemClaim}/cancel', [ItemClaimController::class, 'cancel']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Private ownership-verification Q&A (found reports only)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/item-reports/{itemReport}/verification-questions', [VerificationQuestionController::class, 'forItemReport']);
+    Route::get('/claims/{itemClaim}/answers', [ItemClaimController::class, 'answers']);
 
     /*
     |----------------------------------------------------------------------

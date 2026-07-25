@@ -49,6 +49,16 @@ class ItemClaim extends Model
         return $this->hasMany(Rating::class);
     }
 
+    /**
+     * The claimant's answers to the item report's verification questions
+     * (if any). Only ever exposed to the finder (report owner) alongside
+     * the expected_answer — see ItemClaimController::answers().
+     */
+    public function answers(): HasMany
+    {
+        return $this->hasMany(ClaimAnswer::class);
+    }
+
     public function reports(): HasMany
     {
         return $this->hasMany(Report::class);

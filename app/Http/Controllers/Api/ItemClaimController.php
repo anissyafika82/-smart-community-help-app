@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ItemClaim\StoreItemClaimRequest;
+use App\Http\Resources\ClaimAnswerResource;
 use App\Http\Resources\ItemClaimResource;
 use App\Models\Activity;
 use App\Models\ItemClaim;
@@ -63,7 +64,16 @@ class ItemClaimController extends Controller
                 'status' => ItemClaim::STATUS_PENDING,
             ]);
 
-            $locked->update(['status' => ItemReport::STATUS_CLAIMED]);
+            // The report stays open (lost/found/potential_match) while a
+            // claim is only pending — it only moves to "claimed" once the
+            // report owner actually approves someone's claim below.
+
+            foreach ($request->input('answers', []) as $answer) {
+                $itemClaim->answers()->create([
+                    'verification_question_id' => $answer['verification_question_id'],
+                    'answer' => $answer['answer'],
+                ]);
+            }
 
             return $itemClaim;
         });
@@ -107,6 +117,25 @@ class ItemClaimController extends Controller
     }
 
     /**
+     * The claimant's answers to the report's verification questions,
+     * paired with the private expected_answer — for the report owner to
+     * compare before deciding. Nobody else may see expected_answer.
+     * GET /api/claims/{itemClaim}/answers
+     */
+    public function answers(Request $request, ItemClaim $itemClaim): JsonResponse
+    {
+        $itemClaim->loadMissing('itemReport');
+
+        if ($itemClaim->itemReport->user_id !== $request->user()->id) {
+            abort(403, 'You can only view answers on claims against your own reports.');
+        }
+
+        $answers = $itemClaim->answers()->with('verificationQuestion')->get();
+
+        return response()->json(['data' => ClaimAnswerResource::collection($answers)]);
+    }
+
+    /**
      * Item report owner verifies (approves) a claim — the other pending
      * claims on the same report are automatically rejected.
      * PATCH /api/claims/{itemClaim}/approve
@@ -123,7 +152,7 @@ class ItemClaimController extends Controller
                 ->where('status', ItemClaim::STATUS_PENDING)
                 ->update(['status' => ItemClaim::STATUS_REJECTED]);
 
-            $itemClaim->itemReport()->update(['status' => ItemReport::STATUS_VERIFIED]);
+            $itemClaim->itemReport()->update(['status' => ItemReport::STATUS_CLAIMED]);
         });
         $itemClaim->refresh()->load(['itemReport', 'claimant']);
 

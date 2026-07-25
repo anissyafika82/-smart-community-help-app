@@ -9,6 +9,7 @@ use App\Http\Resources\ItemReportResource;
 use App\Models\ItemReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ItemReportController extends Controller
 {
@@ -108,10 +109,22 @@ class ItemReportController extends Controller
 
     public function store(StoreItemReportRequest $request): JsonResponse
     {
-        $itemReport = $request->user()->itemReports()->create([
-            ...$request->validated(),
-            'status' => $request->validated('report_type'),
-        ]);
+        $fields = $request->validated();
+        $verificationQuestions = $fields['verification_questions'] ?? [];
+        unset($fields['verification_questions']);
+
+        $itemReport = DB::transaction(function () use ($request, $fields, $verificationQuestions) {
+            $itemReport = $request->user()->itemReports()->create([
+                ...$fields,
+                'status' => $fields['report_type'],
+            ]);
+
+            foreach ($verificationQuestions as $question) {
+                $itemReport->verificationQuestions()->create($question);
+            }
+
+            return $itemReport;
+        });
 
         // create() doesn't reload column defaults set at the DB level, so
         // refresh to make sure the response reflects the true DB state.

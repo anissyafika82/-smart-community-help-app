@@ -62,6 +62,17 @@ class ItemReport extends Model
     }
 
     /**
+     * Private, finder-authored Q&A a claimant must answer to submit a
+     * claim. Only ever exposed to the finder (report owner) with their
+     * expected_answer included — see VerificationQuestionController and
+     * ItemClaimController::answers().
+     */
+    public function verificationQuestions(): HasMany
+    {
+        return $this->hasMany(VerificationQuestion::class);
+    }
+
+    /**
      * Claims still active against this report (not yet rejected) — used to
      * decide whether the report should revert to its original lost/found
      * status when a claim is rejected.

@@ -10,8 +10,10 @@ use App\Models\ItemReport;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\OneSignalService;
+use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -60,7 +62,15 @@ class ChatController extends Controller
         ]);
         $message->load('sender');
 
-        broadcast(new MessageSent($message));
+        // The message is already saved at this point — a live-push failure
+        // (e.g. the Reverb server being unreachable) shouldn't fail the
+        // whole request. The recipient still gets it via the REST history
+        // endpoint, just without the instant real-time delivery.
+        try {
+            broadcast(new MessageSent($message));
+        } catch (BroadcastException $e) {
+            Log::warning('Chat message broadcast failed: '.$e->getMessage());
+        }
 
         $this->notifications->notifyUser(
             $user,
