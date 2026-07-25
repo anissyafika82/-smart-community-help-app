@@ -71,16 +71,39 @@ class TelegramBotService
         $command = strtolower(explode('@', $parts[0])[0]);
         $argument = trim($parts[1] ?? '');
 
+        $chatId = (string) $chatId;
+
         match ($command) {
-            '/start' => $this->sendWelcome((string) $chatId),
-            '/founditems' => $this->sendItemList((string) $chatId, 'found'),
-            '/lostitems' => $this->sendItemList((string) $chatId, 'lost'),
-            '/link' => $this->handleLink((string) $chatId, $argument),
-            '/addfoundreport' => $this->startAddReport((string) $chatId, 'found'),
-            '/addlostreport' => $this->startAddReport((string) $chatId, 'lost'),
-            '/cancel' => $this->cancelConversation((string) $chatId),
-            default => $this->sendUnknownCommand((string) $chatId),
+            '/start' => $this->sendWelcome($chatId),
+            '/link' => $this->handleLink($chatId, $argument),
+            '/cancel' => $this->cancelConversation($chatId),
+            '/founditems' => $this->withLinkedUser($chatId, fn () => $this->sendItemList($chatId, 'found')),
+            '/lostitems' => $this->withLinkedUser($chatId, fn () => $this->sendItemList($chatId, 'lost')),
+            '/addfoundreport' => $this->withLinkedUser($chatId, fn ($user) => $this->startAddReport($chatId, $user, 'found')),
+            '/addlostreport' => $this->withLinkedUser($chatId, fn ($user) => $this->startAddReport($chatId, $user, 'lost')),
+            default => $this->sendUnknownCommand($chatId),
         };
+    }
+
+    /**
+     * Every command except /start, /link, and /cancel requires a linked
+     * account — runs $action(User) if this chat is linked, otherwise tells
+     * the user how to link first.
+     */
+    private function withLinkedUser(string $chatId, callable $action): void
+    {
+        $user = User::where('telegram_chat_id', $chatId)->first();
+
+        if (! $user) {
+            $this->telegram->sendMessage(
+                $chatId,
+                "🔒 Please link your FindBack account first: open the app > Profile > Link Telegram Bot, then send /link CODE here.",
+            );
+
+            return;
+        }
+
+        $action($user);
     }
 
     /**
@@ -110,20 +133,34 @@ class TelegramBotService
         }
 
         match ($data) {
-            'founditems' => $this->sendItemList($chatId, 'found'),
-            'lostitems' => $this->sendItemList($chatId, 'lost'),
+            'founditems' => $this->withLinkedUser($chatId, fn () => $this->sendItemList($chatId, 'found')),
+            'lostitems' => $this->withLinkedUser($chatId, fn () => $this->sendItemList($chatId, 'lost')),
             default => null,
         };
     }
 
     private function sendWelcome(string $chatId): void
     {
+        $isLinked = User::where('telegram_chat_id', $chatId)->exists();
+
+        if (! $isLinked) {
+            $this->telegram->sendMessage(
+                $chatId,
+                "👋 <b>Welcome to FindBack!</b>\n\n"
+                    .'This bot lets you browse and report lost &amp; found items from the community — but first, link it to your FindBack account:'."\n\n"
+                    .'1. Open the app > Profile > Link Telegram Bot'."\n"
+                    .'2. Send the code here as: /link CODE'."\n\n"
+                    .'Or just follow the broadcast channel: @findback_founditems',
+            );
+
+            return;
+        }
+
         $this->telegram->sendMessage(
             $chatId,
-            "👋 <b>Welcome to FindBack!</b>\n\n"
-                .'This bot helps you browse lost &amp; found reports from the community, and — once your account is linked — report one yourself.'."\n\n"
+            "👋 <b>Welcome back!</b>\n\n"
                 .'<b>Browse:</b> tap a button below, or type /founditems / /lostitems'."\n"
-                .'<b>Report an item:</b> /addfoundreport or /addlostreport (link your account first with /link — see Profile in the app)'."\n\n"
+                .'<b>Report an item:</b> /addfoundreport or /addlostreport'."\n\n"
                 .'Or join the broadcast channel: @findback_founditems',
             self::MENU_KEYBOARD,
         );
@@ -195,19 +232,8 @@ class TelegramBotService
         );
     }
 
-    private function startAddReport(string $chatId, string $reportType): void
+    private function startAddReport(string $chatId, User $user, string $reportType): void
     {
-        $user = User::where('telegram_chat_id', $chatId)->first();
-
-        if (! $user) {
-            $this->telegram->sendMessage(
-                $chatId,
-                "You need to link your FindBack account first. Open the app > Profile > Link Telegram Bot, then send /link CODE here.",
-            );
-
-            return;
-        }
-
         TelegramConversationState::updateOrCreate(
             ['chat_id' => $chatId],
             ['user_id' => $user->id, 'step' => self::STEP_ITEM_NAME, 'payload' => ['report_type' => $reportType]],
