@@ -40,10 +40,10 @@ class CustomLocationController extends Controller
     }
 
     /**
-     * POST /api/locations — called after a user resolves a location the
-     * app couldn't find on its own (e.g. Nominatim search came back empty
-     * and they tapped the correct spot on the map instead), so the next
-     * person searching the same name finds it instantly.
+     * POST /api/locations — called every time a user's search successfully
+     * resolves to a spot (either via Nominatim, or by manually correcting
+     * one that came back empty), so the search box becomes a growing,
+     * shared cache of name -> coordinate pairings for next time.
      */
     public function store(Request $request): JsonResponse
     {
@@ -54,7 +54,7 @@ class CustomLocationController extends Controller
         ]);
 
         $location = CustomLocation::query()
-            ->where('name', $fields['name'])
+            ->whereRaw('LOWER(name) = ?', [strtolower($fields['name'])])
             ->first();
 
         if ($location) {
