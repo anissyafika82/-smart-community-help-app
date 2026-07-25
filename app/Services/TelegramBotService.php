@@ -12,10 +12,14 @@ use App\Models\User;
  * Handles incoming Telegram webhook updates — replies to the bot commands
  * a user types directly in a DM with it (/start, /founditems, /lostitems,
  * /link, /addfoundreport, /addlostreport, /cancel), the inline buttons
- * attached to those replies, and the free-text answers of an in-progress
- * /addfoundreport or /addlostreport conversation. Separate from
- * TelegramService (which only sends) so the read/query side of the bot
- * stays easy to test and extend independently.
+ * attached to those replies, and the free-text/photo/location answers of
+ * an in-progress /addfoundreport or /addlostreport conversation. Walks
+ * through the same fields as the app's "Report an Item" screen: item
+ * name, description, category, location name, date, private identifying
+ * details, verification questions (found items only), a photo, and an
+ * exact GPS location. Separate from TelegramService (which only sends) so
+ * the read/query side of the bot stays easy to test and extend
+ * independently.
  */
 class TelegramBotService
 {
@@ -24,8 +28,12 @@ class TelegramBotService
     private const STEP_ITEM_NAME = 'item_name';
     private const STEP_DESCRIPTION = 'description';
     private const STEP_CATEGORY = 'category';
-    private const STEP_LOCATION = 'location';
+    private const STEP_LOCATION_NAME = 'location_name';
+    private const STEP_DATE = 'date';
+    private const STEP_IDENTIFYING_DETAILS = 'identifying_details';
+    private const STEP_VERIFICATION = 'verification';
     private const STEP_PHOTO = 'photo';
+    private const STEP_GPS = 'gps';
 
     private const MENU_KEYBOARD = [
         [
@@ -59,6 +67,12 @@ class TelegramBotService
 
         if (isset($message['photo'])) {
             $this->continueConversationWithPhoto($chatId, $message['photo']);
+
+            return;
+        }
+
+        if (isset($message['location'])) {
+            $this->continueConversationWithLocation($chatId, $message['location']);
 
             return;
         }
@@ -254,7 +268,7 @@ class TelegramBotService
         );
 
         $label = $reportType === 'found' ? 'found' : 'lost';
-        $this->telegram->sendMessage($chatId, "Reporting a {$label} item. What's the item's name? (/cancel to stop)");
+        $this->telegram->sendMessage($chatId, "Reporting a {$label} item. What's the item's name? (/cancel any time to stop)");
     }
 
     private function cancelConversation(string $chatId): void
@@ -281,8 +295,12 @@ class TelegramBotService
         match ($state->step) {
             self::STEP_ITEM_NAME => $this->collectItemName($state, $text),
             self::STEP_DESCRIPTION => $this->collectDescription($state, $text),
-            self::STEP_LOCATION => $this->collectLocation($state, $text),
-            self::STEP_PHOTO => $this->skipPhotoAndCreate($state, $text),
+            self::STEP_LOCATION_NAME => $this->collectLocationName($state, $text),
+            self::STEP_DATE => $this->collectDate($state, $text),
+            self::STEP_IDENTIFYING_DETAILS => $this->collectIdentifyingDetails($state, $text),
+            self::STEP_VERIFICATION => $this->collectVerification($state, $text),
+            self::STEP_PHOTO => $this->skipPhoto($state, $text),
+            self::STEP_GPS => $this->skipGps($state, $text),
             default => null,
         };
     }
@@ -311,10 +329,24 @@ class TelegramBotService
         $imageUrl = $fileUrl ? $this->cloudinary->uploadFromUrl($fileUrl) : null;
 
         if (! $imageUrl) {
-            $this->telegram->sendMessage($chatId, "Couldn't upload that photo — posting the report without it.");
+            $this->telegram->sendMessage($chatId, "Couldn't upload that photo — continuing without it.");
         }
 
-        $this->finishAddReport($state, $imageUrl);
+        $this->advanceToGps($state, $imageUrl);
+    }
+
+    /**
+     * A shared Telegram location while STEP_GPS is active (📎 > Location).
+     */
+    private function continueConversationWithLocation(string $chatId, array $location): void
+    {
+        $state = TelegramConversationState::where('chat_id', $chatId)->where('step', self::STEP_GPS)->first();
+
+        if (! $state) {
+            return;
+        }
+
+        $this->finishAddReport($state, $location['latitude'] ?? null, $location['longitude'] ?? null);
     }
 
     private function collectItemName(TelegramConversationState $state, string $text): void
@@ -343,18 +375,129 @@ class TelegramBotService
             return;
         }
 
-        $state->update(['payload' => [...$state->payload, 'category_id' => $categoryId], 'step' => self::STEP_LOCATION]);
+        $state->update(['payload' => [...$state->payload, 'category_id' => $categoryId], 'step' => self::STEP_LOCATION_NAME]);
         $this->telegram->sendMessage($chatId, "Where was it lost/found? (or send 'skip')");
     }
 
-    private function collectLocation(TelegramConversationState $state, string $text): void
+    private function collectLocationName(TelegramConversationState $state, string $text): void
     {
         $locationName = strtolower($text) === 'skip' ? null : $text;
-        $state->update(['payload' => [...$state->payload, 'location_name' => $locationName], 'step' => self::STEP_PHOTO]);
+        $state->update(['payload' => [...$state->payload, 'location_name' => $locationName], 'step' => self::STEP_DATE]);
+        $this->telegram->sendMessage($state->chat_id, "When did you lose/find it? Send a date like 2026-07-20, or type 'today'.");
+    }
+
+    private function collectDate(TelegramConversationState $state, string $text): void
+    {
+        $date = $this->parseDate($text);
+
+        if ($date === null) {
+            $this->telegram->sendMessage(
+                $state->chat_id,
+                "Sorry, I couldn't understand that date. Try a format like 2026-07-20, or type 'today'.",
+            );
+
+            return;
+        }
+
+        $state->update(['payload' => [...$state->payload, 'date_lost_or_found' => $date], 'step' => self::STEP_IDENTIFYING_DETAILS]);
+        $this->telegram->sendMessage(
+            $state->chat_id,
+            "Any private identifying details to help verify ownership later (e.g. a scratch, engraving, serial number)? Only you and the other party will see this. Or send 'skip'.",
+        );
+    }
+
+    private function parseDate(string $text): ?string
+    {
+        $text = trim($text);
+
+        if (strtolower($text) === 'today') {
+            return now()->toDateString();
+        }
+
+        $timestamp = strtotime($text);
+
+        if ($timestamp === false) {
+            return null;
+        }
+
+        $date = date('Y-m-d', $timestamp);
+
+        return $date > now()->toDateString() ? null : $date;
+    }
+
+    private function collectIdentifyingDetails(TelegramConversationState $state, string $text): void
+    {
+        $details = strtolower($text) === 'skip' ? null : $text;
+        $payload = [...$state->payload, 'identifying_details' => $details];
+
+        if ($payload['report_type'] === 'found') {
+            $state->update(['payload' => $payload, 'step' => self::STEP_VERIFICATION]);
+            $this->telegram->sendMessage(
+                $state->chat_id,
+                "Optional: add 2-4 verification questions only the true owner would know — claimants must answer all of them. "
+                    ."Send one at a time as 'Question | Answer' (e.g. 'What color is the case? | Blue'). "
+                    ."Type 'done' when finished (need at least 2), or 'skip' to skip this step.",
+            );
+
+            return;
+        }
+
+        $state->update(['payload' => $payload, 'step' => self::STEP_PHOTO]);
         $this->telegram->sendMessage($state->chat_id, "Send a photo of the item, or send 'skip' to post without one.");
     }
 
-    private function skipPhotoAndCreate(TelegramConversationState $state, string $text): void
+    private function collectVerification(TelegramConversationState $state, string $text): void
+    {
+        $lower = strtolower(trim($text));
+        $questions = $state->payload['verification_questions'] ?? [];
+
+        if ($lower === 'skip') {
+            $this->advanceToPhoto($state, []);
+
+            return;
+        }
+
+        if ($lower === 'done') {
+            if (count($questions) === 1) {
+                $this->telegram->sendMessage($state->chat_id, "Add at least one more (need 2 minimum), or type 'skip' to drop them all.");
+
+                return;
+            }
+
+            $this->advanceToPhoto($state, $questions);
+
+            return;
+        }
+
+        if (count($questions) >= 4) {
+            $this->telegram->sendMessage($state->chat_id, "Maximum of 4 reached — type 'done' to continue.");
+
+            return;
+        }
+
+        $parts = array_map('trim', explode('|', $text, 2));
+
+        if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+            $this->telegram->sendMessage($state->chat_id, "Please send it as 'Question | Answer', or type 'done' / 'skip'.");
+
+            return;
+        }
+
+        $questions[] = ['question' => $parts[0], 'expected_answer' => $parts[1]];
+        $state->update(['payload' => [...$state->payload, 'verification_questions' => $questions]]);
+        $this->telegram->sendMessage(
+            $state->chat_id,
+            'Added ('.count($questions)."/4). Send another, or type 'done' (min 2) or 'skip'.",
+        );
+    }
+
+    private function advanceToPhoto(TelegramConversationState $state, array $verificationQuestions): void
+    {
+        $state->update(['payload' => [...$state->payload, 'verification_questions' => $verificationQuestions], 'step' => self::STEP_PHOTO]);
+        $this->telegram->sendMessage($state->chat_id, "Send a photo of the item, or send 'skip' to post without one.");
+    }
+
+    private function skipPhoto(TelegramConversationState $state, string $text): void
     {
         if (strtolower($text) !== 'skip') {
             $this->telegram->sendMessage($state->chat_id, "Send a photo, or type 'skip' to post without one.");
@@ -362,10 +505,30 @@ class TelegramBotService
             return;
         }
 
-        $this->finishAddReport($state, null);
+        $this->advanceToGps($state, null);
     }
 
-    private function finishAddReport(TelegramConversationState $state, ?string $imageUrl): void
+    private function advanceToGps(TelegramConversationState $state, ?string $imageUrl): void
+    {
+        $state->update(['payload' => [...$state->payload, 'image_url' => $imageUrl], 'step' => self::STEP_GPS]);
+        $this->telegram->sendMessage(
+            $state->chat_id,
+            "Last step: share the exact location for the map (📎 > Location), or send 'skip' to finish without it.",
+        );
+    }
+
+    private function skipGps(TelegramConversationState $state, string $text): void
+    {
+        if (strtolower($text) !== 'skip') {
+            $this->telegram->sendMessage($state->chat_id, "Share your location, or type 'skip' to finish.");
+
+            return;
+        }
+
+        $this->finishAddReport($state, null, null);
+    }
+
+    private function finishAddReport(TelegramConversationState $state, ?float $latitude, ?float $longitude): void
     {
         $payload = $state->payload;
         $chatId = $state->chat_id;
@@ -376,11 +539,18 @@ class TelegramBotService
             'report_type' => $payload['report_type'],
             'item_name' => $payload['item_name'],
             'description' => $payload['description'],
-            'image_url' => $imageUrl,
-            'date_lost_or_found' => now()->toDateString(),
+            'image_url' => $payload['image_url'] ?? null,
+            'date_lost_or_found' => $payload['date_lost_or_found'],
             'location_name' => $payload['location_name'] ?? null,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'identifying_details' => $payload['identifying_details'] ?? null,
             'status' => $payload['report_type'],
         ]);
+
+        foreach ($payload['verification_questions'] ?? [] as $question) {
+            $itemReport->verificationQuestions()->create($question);
+        }
 
         $state->delete();
 
