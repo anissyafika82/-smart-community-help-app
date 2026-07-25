@@ -13,10 +13,10 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'admin@communityhelp.test'],
+            ['email' => 'admin123@gmail.com'],
             [
                 'name' => 'System Admin',
-                'password' => 'password',
+                'password' => 'admin123_',
                 'role' => User::ROLE_ADMIN,
                 'is_active' => true,
                 'email_verified_at' => now(),
