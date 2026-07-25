@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ItemReportController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\TelegramWebhookController;
 use App\Http\Controllers\Api\VerificationQuestionController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,8 @@ Route::get('/item-reports', [ItemReportController::class, 'index']);
 Route::get('/item-reports/nearby', [ItemReportController::class, 'nearby']);
 Route::get('/item-reports/{itemReport}', [ItemReportController::class, 'show']);
 Route::get('/item-reports/{itemReport}/matches', [MatchController::class, 'forItemReport']);
+
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle']);
 
 /*
 |--------------------------------------------------------------------------

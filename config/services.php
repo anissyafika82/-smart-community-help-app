@@ -54,6 +54,10 @@ return [
         // ID or, for a public channel, "@channelusername".
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),
+        // Verifies incoming /telegram/webhook calls really come from
+        // Telegram (sent back as X-Telegram-Bot-Api-Secret-Token). Set via
+        // setWebhook — see routes/api.php and the TELEGRAM setup notes.
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
     ],
 
 ];
