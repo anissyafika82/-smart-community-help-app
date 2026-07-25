@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ItemClaimController;
 use App\Http\Controllers\Api\ItemReportController;
 use App\Http\Controllers\Api\MatchController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TelegramLinkController;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/forgot-password', [PasswordResetController::class, 'requestCode']);
+Route::post('/reset-password-with-code', [PasswordResetController::class, 'reset']);
 
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/item-reports', [ItemReportController::class, 'index']);
