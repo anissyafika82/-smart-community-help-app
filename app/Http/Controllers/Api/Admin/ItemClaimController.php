@@ -30,4 +30,34 @@ class ItemClaimController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Override a claim's status directly (moderation) — bypasses the
+     * normal approve/reject/return pipeline's ownership checks.
+     * PATCH /api/admin/item-claims/{itemClaim}
+     */
+    public function update(Request $request, ItemClaim $itemClaim): JsonResponse
+    {
+        $fields = $request->validate([
+            'status' => ['required', 'in:pending,approved,rejected'],
+        ]);
+
+        $itemClaim->update($fields);
+
+        return response()->json([
+            'message' => 'Claim updated.',
+            'data' => new ItemClaimResource($itemClaim->fresh(['itemReport.category', 'claimant'])),
+        ]);
+    }
+
+    /**
+     * Admin can remove any claim (moderation).
+     * DELETE /api/admin/item-claims/{itemClaim}
+     */
+    public function destroy(ItemClaim $itemClaim): JsonResponse
+    {
+        $itemClaim->delete();
+
+        return response()->json(['message' => 'Claim removed successfully.']);
+    }
 }

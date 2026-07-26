@@ -48,4 +48,15 @@ class ReportController extends Controller
             'data' => new ReportResource($report->fresh(['reporter', 'reportedUser', 'itemClaim'])),
         ]);
     }
+
+    /**
+     * Admin can remove a report entry entirely (e.g. once fully resolved).
+     * DELETE /api/admin/reports/{report}
+     */
+    public function destroy(Report $report): JsonResponse
+    {
+        $report->delete();
+
+        return response()->json(['message' => 'Report removed successfully.']);
+    }
 }

@@ -129,19 +129,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{user}', [AdminUserController::class, 'show']);
+        Route::patch('/users/{user}', [AdminUserController::class, 'update']);
         Route::patch('/users/{user}/toggle-active', [AdminUserController::class, 'toggleActive']);
         Route::patch('/users/{user}/reset-password', [AdminUserController::class, 'resetPassword']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
 
         Route::get('/item-reports', [AdminItemReportController::class, 'index']);
+        Route::patch('/item-reports/{itemReport}', [AdminItemReportController::class, 'update']);
         Route::delete('/item-reports/{itemReport}', [AdminItemReportController::class, 'destroy']);
 
         Route::get('/item-claims', [AdminItemClaimController::class, 'index']);
+        Route::patch('/item-claims/{itemClaim}', [AdminItemClaimController::class, 'update']);
+        Route::delete('/item-claims/{itemClaim}', [AdminItemClaimController::class, 'destroy']);
 
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 
         Route::get('/reports', [AdminReportController::class, 'index']);
         Route::patch('/reports/{report}', [AdminReportController::class, 'update']);
+        Route::delete('/reports/{report}', [AdminReportController::class, 'destroy']);
     });
 });

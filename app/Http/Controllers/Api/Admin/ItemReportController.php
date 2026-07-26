@@ -33,6 +33,29 @@ class ItemReportController extends Controller
     }
 
     /**
+     * Admin can edit any item report (moderation) — the owner-only
+     * UpdateItemReportRequest doesn't apply here since the admin usually
+     * isn't the report's owner. PATCH /api/admin/item-reports/{itemReport}
+     */
+    public function update(Request $request, ItemReport $itemReport): JsonResponse
+    {
+        $fields = $request->validate([
+            'category_id' => ['sometimes', 'exists:categories,id'],
+            'item_name' => ['sometimes', 'string', 'max:255'],
+            'description' => ['sometimes', 'string', 'max:2000'],
+            'location_name' => ['nullable', 'string', 'max:500'],
+            'status' => ['sometimes', 'in:lost,found,potential_match,claimed,verified,returned,closed'],
+        ]);
+
+        $itemReport->update($fields);
+
+        return response()->json([
+            'message' => 'Item report updated.',
+            'data' => new ItemReportResource($itemReport->fresh(['user', 'category'])),
+        ]);
+    }
+
+    /**
      * Admin can remove any item report (moderation).
      */
     public function destroy(ItemReport $itemReport): JsonResponse

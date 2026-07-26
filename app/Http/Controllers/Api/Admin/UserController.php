@@ -37,6 +37,27 @@ class UserController extends Controller
     }
 
     /**
+     * Edit a user's profile fields. PATCH /api/admin/users/{user}
+     */
+    public function update(Request $request, User $user): JsonResponse
+    {
+        $fields = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'string', 'email', 'max:255', "unique:users,email,{$user->id}"],
+            'role' => ['sometimes', 'in:'.User::ROLE_ADMIN.','.User::ROLE_USER],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:500'],
+        ]);
+
+        $user->update($fields);
+
+        return response()->json([
+            'message' => 'User updated.',
+            'data' => new UserResource($user->fresh()),
+        ]);
+    }
+
+    /**
      * Activate or deactivate a user account. PATCH /api/admin/users/{user}/toggle-active
      */
     public function toggleActive(User $user): JsonResponse
